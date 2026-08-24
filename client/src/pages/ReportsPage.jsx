@@ -21,6 +21,7 @@ import {
   Search,
   Filter,
   Sparkles,
+  X,
 } from 'lucide-react';
 import {
   ResponsiveContainer,

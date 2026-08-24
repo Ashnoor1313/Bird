@@ -20,6 +20,7 @@ import {
   Users,
   Wallet,
   Printer,
+  Upload,
 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ReceiveMoneyModal } from '../components/modals/ReceiveMoneyModal';
