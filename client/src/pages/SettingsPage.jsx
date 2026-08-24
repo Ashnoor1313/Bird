@@ -262,6 +262,30 @@ export const SettingsPage = () => {
     }
   };
 
+  const handleCleanSlateReset = async () => {
+    if (!window.confirm('⚠️ ARE YOU SURE? This will permanently delete all products, stock, sales bills, and customers to start 100% fresh. This cannot be undone!')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/businesses/${activeBusinessId}/clean-slate`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        addToast('✨ All data erased successfully! Ready for a 100% fresh start.', 'success');
+        queryClient.invalidateQueries();
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 800);
+      } else {
+        addToast('Failed to reset data', 'error');
+      }
+    } catch (err) {
+      addToast('Error resetting data', 'error');
+    }
+  };
+
   const handleRenameCategory = async (catId) => {
     if (!editingCatName.trim()) return;
 
@@ -502,6 +526,27 @@ export const SettingsPage = () => {
           </div>
         </div>
       )}
+
+      {/* DANGER ZONE: CLEAN SLATE RESET CARD (START FRESH) */}
+      <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <h4 className="text-xs font-bold text-rose-900 flex items-center gap-1.5">
+            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <span>Erase All Data & Start Fresh</span>
+          </h4>
+          <p className="text-[11px] text-rose-700 font-medium">
+            Permanently wipe all products, stock quantities, bills, and customers to start with clean 0 entries.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleCleanSlateReset}
+          className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs shrink-0 flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Erase & Start Fresh</span>
+        </button>
+      </div>
 
       {/* CHANGE ADMIN PASSWORD DRAWER */}
       {isAdmin && showChangePassword && (

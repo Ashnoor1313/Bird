@@ -126,4 +126,41 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// CLEAN SLATE RESET: Wipe all products, sales, purchases, customers, and stocks for a 100% fresh start
+router.post('/:id/clean-slate', async (req, res) => {
+  try {
+    const businessId = req.params.id;
+
+    // Delete in relational order
+    await prisma.saleItem.deleteMany({});
+    await prisma.sale.deleteMany({ where: { businessId } });
+    await prisma.purchaseItem.deleteMany({});
+    await prisma.purchase.deleteMany({ where: { businessId } });
+    await prisma.stockMovement.deleteMany({ where: { businessId } });
+    await prisma.locationStock.deleteMany({ where: { businessId } });
+    await prisma.orderItem.deleteMany({});
+    await prisma.order.deleteMany({ where: { businessId } });
+    await prisma.paymentTransaction.deleteMany({ where: { businessId } });
+    await prisma.product.deleteMany({ where: { businessId } });
+    await prisma.customer.deleteMany({ where: { businessId } });
+    await prisma.supplier.deleteMany({ where: { businessId } });
+
+    // Reset account balances to 0
+    await prisma.accountBalance.updateMany({
+      where: { businessId },
+      data: {
+        cashBalance: 0,
+        bankBalance: 0,
+        upiBalance: 0,
+      },
+    });
+
+    console.log(`🧹 Database wiped completely for Business ${businessId} — Ready for 100% Fresh Start!`);
+    res.json({ success: true, message: 'All data erased successfully! Ready for fresh start.' });
+  } catch (err) {
+    console.error('Clean Slate Error:', err);
+    res.status(500).json({ error: 'Failed to reset data', message: err.message });
+  }
+});
+
 export default router;

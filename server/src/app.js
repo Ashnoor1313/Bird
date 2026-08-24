@@ -193,10 +193,6 @@ async function initBaselineData() {
         console.log(`✅ Created location: ${loc.name}`);
       }
     }
-
-    // Auto-seed initial 29 phone models and stocks if database is empty
-    const { seedProductsIfEmpty } = await import('./scripts/seed_cloud_products.js');
-    await seedProductsIfEmpty(business.id);
   } catch (err) {
     console.warn('Database baseline initialization notice:', err.message);
   }
