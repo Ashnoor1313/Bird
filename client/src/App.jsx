@@ -37,14 +37,22 @@ const ImportPage = lazy(() => import('./pages/ImportPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 import { AdminUnlockModal } from './components/modals/AdminUnlockModal';
+import { SplashScreen } from './components/common/SplashScreen';
 
 function AppLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const { adminModalOpen, setAdminModalOpen } = useAuth();
+  const [showSplash, setShowSplash] = useState(() => {
+    // Show splash screen smoothly on app load
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white relative">
+      {/* Brand Opening Splash Transition */}
+      {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
+
       {/* Top Navigation Shell */}
       <Navbar
         onOpenSearch={() => setSearchOpen(true)}
