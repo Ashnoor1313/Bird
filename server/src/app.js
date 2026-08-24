@@ -95,8 +95,18 @@ app.use('/api/orders', ordersRoutes);
 // =============================================================================
 // SERVE PRODUCTION CLIENT SPA (For 1-Command Deployment on Cloud / VPS)
 // =============================================================================
-const clientDistPath = path.resolve('../client/dist');
-if (fs.existsSync(clientDistPath)) {
+const candidatePaths = [
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(process.cwd(), '../client/dist'),
+  path.resolve('client/dist'),
+  path.resolve('../client/dist'),
+  path.resolve('./client/dist'),
+];
+
+const clientDistPath = candidatePaths.find(p => fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html')));
+
+if (clientDistPath) {
+  console.log(`📦 Serving production SPA from: ${clientDistPath}`);
   app.use(express.static(clientDistPath));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
@@ -104,6 +114,8 @@ if (fs.existsSync(clientDistPath)) {
     }
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
+} else {
+  console.warn('⚠️ client/dist not found. API routes are active.');
 }
 
 // Friendly Global Error Handler (Rule: Never show technical 500 crash to user)
