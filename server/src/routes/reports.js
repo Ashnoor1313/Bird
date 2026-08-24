@@ -161,11 +161,19 @@ router.get('/dashboard', async (req, res) => {
     let outOfStockCount = 0;
     let lowStockProducts = [];
 
+    const isGodownLoc = !isLocationSpecific || activeLoc?.type === 'GODOWN' || /godown|warehouse|central/i.test(activeLoc?.name || '');
+
     products.forEach(p => {
-      let qty = p.currentStock;
+      let qty = p.currentStock || 0;
       if (isLocationSpecific) {
         const locStock = p.locationStocks?.find(ls => ls.locationId === locationId);
-        qty = locStock ? (locStock.goodStock !== undefined ? locStock.goodStock : locStock.quantity) : 0;
+        if (locStock) {
+          qty = (locStock.goodStock !== undefined ? locStock.goodStock : locStock.quantity) || 0;
+        } else if (isGodownLoc) {
+          qty = p.currentStock || 0;
+        } else {
+          qty = 0;
+        }
       }
 
       const costPrice = p.purchasePrice || 0;
@@ -372,18 +380,38 @@ router.get('/category-hub', async (req, res) => {
       orderBy: { createdAt: 'asc' },
     });
 
-    // 4. Calculate Central Godown Stock Metrics
+    const activeLoc = isLocationSpecific ? locations.find(l => l.id === locationId) : null;
+    const isGodownLoc = !isLocationSpecific || activeLoc?.type === 'GODOWN' || /godown|warehouse|central/i.test(activeLoc?.name || '');
+
+    // 4. Calculate Category Stock Metrics
     let totalStockPcs = 0;
     let totalStockValue = 0;
     let lowStockCount = 0;
     let outOfStockCount = 0;
 
     const productList = allProducts.map(p => {
-      // Single Source of Truth: Central Godown Inventory
-      const qty = p.currentStock;
-      const goodQty = p.goodStock || p.currentStock;
-      const defectiveQty = p.defectiveStock || 0;
-      const testingQty = p.testingStock || 0;
+      let qty = p.currentStock || 0;
+      let goodQty = p.goodStock || p.currentStock || 0;
+      let defectiveQty = p.defectiveStock || 0;
+      let testingQty = p.testingStock || 0;
+
+      if (isLocationSpecific) {
+        const ls = p.locationStocks?.find(s => s.locationId === locationId);
+        if (ls) {
+          qty = ls.goodStock !== undefined ? ls.goodStock : ls.quantity;
+          goodQty = ls.goodStock !== undefined ? ls.goodStock : qty;
+          defectiveQty = ls.defectiveStock || 0;
+          testingQty = ls.testingStock || 0;
+        } else if (isGodownLoc) {
+          qty = p.currentStock || 0;
+          goodQty = p.goodStock || p.currentStock || 0;
+        } else {
+          qty = 0;
+          goodQty = 0;
+          defectiveQty = 0;
+          testingQty = 0;
+        }
+      }
 
       totalStockPcs += qty;
       totalStockValue += qty * (p.purchasePrice || 0);
