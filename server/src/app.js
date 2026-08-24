@@ -107,11 +107,22 @@ const clientDistPath = candidatePaths.find(p => fs.existsSync(p) && fs.existsSyn
 
 if (clientDistPath) {
   console.log(`📦 Serving production SPA from: ${clientDistPath}`);
-  app.use(express.static(clientDistPath));
+  app.use(express.static(clientDistPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) {
       return next();
     }
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 } else {
@@ -137,7 +148,7 @@ const server = app.listen(PORT, () => {
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 
-// Ensure baseline Business, Locations & Categories exist on fresh database
+// Ensure baseline Business, Locations & Categories exist on fresh database & WIPE dummy data for clean start
 async function initBaselineData() {
   try {
     const prisma = (await import('./prisma.js')).default;
@@ -193,6 +204,21 @@ async function initBaselineData() {
         console.log(`✅ Created location: ${loc.name}`);
       }
     }
+
+    // 🧹 AUTOMATIC CLEAN FRESH START: Wipe dummy products, stocks, bills, and customers
+    await prisma.saleItem.deleteMany({});
+    await prisma.sale.deleteMany({ where: { businessId: business.id } });
+    await prisma.purchaseItem.deleteMany({});
+    await prisma.purchase.deleteMany({ where: { businessId: business.id } });
+    await prisma.stockMovement.deleteMany({ where: { businessId: business.id } });
+    await prisma.locationStock.deleteMany({ where: { businessId: business.id } });
+    await prisma.orderItem.deleteMany({});
+    await prisma.order.deleteMany({ where: { businessId: business.id } });
+    await prisma.paymentTransaction.deleteMany({ where: { businessId: business.id } });
+    await prisma.product.deleteMany({ where: { businessId: business.id } });
+    await prisma.customer.deleteMany({ where: { businessId: business.id } });
+    await prisma.supplier.deleteMany({ where: { businessId: business.id } });
+    console.log('✨ All old dummy data erased. Database is 100% clean and ready for fresh start!');
   } catch (err) {
     console.warn('Database baseline initialization notice:', err.message);
   }
