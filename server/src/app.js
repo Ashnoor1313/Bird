@@ -206,19 +206,19 @@ async function initBaselineData() {
     }
 
     // 🧹 AUTOMATIC CLEAN FRESH START: Wipe dummy products, stocks, bills, and customers
+    await prisma.customerLedger.deleteMany({ where: { businessId: business.id } });
+    await prisma.supplierLedger.deleteMany({ where: { businessId: business.id } });
+    await prisma.payment.deleteMany({ where: { businessId: business.id } });
     await prisma.saleItem.deleteMany({});
     await prisma.sale.deleteMany({ where: { businessId: business.id } });
     await prisma.purchaseItem.deleteMany({});
     await prisma.purchase.deleteMany({ where: { businessId: business.id } });
     await prisma.stockMovement.deleteMany({ where: { businessId: business.id } });
     await prisma.locationStock.deleteMany({ where: { businessId: business.id } });
-    await prisma.orderItem.deleteMany({});
-    await prisma.order.deleteMany({ where: { businessId: business.id } });
-    await prisma.paymentTransaction.deleteMany({ where: { businessId: business.id } });
     await prisma.product.deleteMany({ where: { businessId: business.id } });
     await prisma.customer.deleteMany({ where: { businessId: business.id } });
     await prisma.supplier.deleteMany({ where: { businessId: business.id } });
-    console.log('✨ All old dummy data erased. Database is 100% clean and ready for fresh start!');
+    console.log('✨ All old dummy products, stocks and bills erased. Database is 100% clean!');
   } catch (err) {
     console.warn('Database baseline initialization notice:', err.message);
   }
