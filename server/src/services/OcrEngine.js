@@ -123,18 +123,35 @@ Return ONLY valid JSON:
   ]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          inlineData: {
-            mimeType: 'image/jpeg',
-            data: base64Image,
+    let response;
+    try {
+      response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: base64Image,
+            },
           },
-        },
-        prompt,
-      ],
-    });
+          prompt,
+        ],
+      });
+    } catch (e) {
+      // Fallback to gemini-1.5-flash if 2.0 is unavailable
+      response = await ai.models.generateContent({
+        model: 'gemini-1.5-flash',
+        contents: [
+          {
+            inlineData: {
+              mimeType: 'image/jpeg',
+              data: base64Image,
+            },
+          },
+          prompt,
+        ],
+      });
+    }
 
     const text = response.text;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
