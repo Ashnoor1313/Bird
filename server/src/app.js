@@ -137,3 +137,67 @@ const server = app.listen(PORT, () => {
 server.keepAliveTimeout = 65000;
 server.headersTimeout = 66000;
 
+// Ensure baseline Business, Locations & Categories exist on fresh database
+async function initBaselineData() {
+  try {
+    const prisma = (await import('./prisma.js')).default;
+    let business = await prisma.business.findFirst();
+    if (!business) {
+      business = await prisma.business.create({
+        data: {
+          name: 'MI2 Impex',
+          billPrefix: 'MI2',
+          startingBillNo: 1001,
+          state: 'Delhi',
+        },
+      });
+      console.log('✅ Created default business: MI2 Impex');
+    }
+
+    // Ensure Categories
+    const categories = ['Folders', 'Batteries'];
+    for (const catName of categories) {
+      const existingCat = await prisma.category.findFirst({
+        where: { businessId: business.id, name: catName },
+      });
+      if (!existingCat) {
+        await prisma.category.create({
+          data: {
+            businessId: business.id,
+            name: catName,
+            description: `${catName} spare parts`,
+          },
+        });
+        console.log(`✅ Created category: ${catName}`);
+      }
+    }
+
+    // Ensure Locations
+    const defaultLocations = [
+      { name: 'Godown', type: 'GODOWN' },
+      { name: 'Store 1', type: 'STORE' },
+      { name: 'Store 2', type: 'STORE' },
+    ];
+    for (const loc of defaultLocations) {
+      const existingLoc = await prisma.location.findFirst({
+        where: { businessId: business.id, name: loc.name },
+      });
+      if (!existingLoc) {
+        await prisma.location.create({
+          data: {
+            businessId: business.id,
+            name: loc.name,
+            type: loc.type,
+          },
+        });
+        console.log(`✅ Created location: ${loc.name}`);
+      }
+    }
+  } catch (err) {
+    console.warn('Database baseline initialization notice:', err.message);
+  }
+}
+
+initBaselineData();
+
+

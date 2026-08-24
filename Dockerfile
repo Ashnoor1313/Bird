@@ -28,4 +28,5 @@ COPY --from=builder /app/client/dist ./client/dist
 
 EXPOSE 5000
 
-CMD ["node", "server/src/app.js"]
+# Push schema automatically on startup so PostgreSQL tables are always created
+CMD ["sh", "-c", "cd server && npx prisma db push --accept-data-loss && node src/app.js"]
