@@ -205,20 +205,7 @@ async function initBaselineData() {
       }
     }
 
-    // 🧹 AUTOMATIC CLEAN FRESH START: Wipe dummy products, stocks, bills, and customers
-    await prisma.customerLedger.deleteMany({ where: { businessId: business.id } });
-    await prisma.supplierLedger.deleteMany({ where: { businessId: business.id } });
-    await prisma.payment.deleteMany({ where: { businessId: business.id } });
-    await prisma.saleItem.deleteMany({});
-    await prisma.sale.deleteMany({ where: { businessId: business.id } });
-    await prisma.purchaseItem.deleteMany({});
-    await prisma.purchase.deleteMany({ where: { businessId: business.id } });
-    await prisma.stockMovement.deleteMany({ where: { businessId: business.id } });
-    await prisma.locationStock.deleteMany({ where: { businessId: business.id } });
-    await prisma.product.deleteMany({ where: { businessId: business.id } });
-    await prisma.customer.deleteMany({ where: { businessId: business.id } });
-    await prisma.supplier.deleteMany({ where: { businessId: business.id } });
-    console.log('✨ All old dummy products, stocks and bills erased. Database is 100% clean!');
+    console.log('✅ Baseline business, locations, and categories verified and ready.');
   } catch (err) {
     console.warn('Database baseline initialization notice:', err.message);
   }
