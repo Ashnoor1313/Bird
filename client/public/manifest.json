@@ -1,0 +1,23 @@
+{
+  "short_name": "MI2 Impex",
+  "name": "MI2 Impex — Mobile Spare Parts ERP",
+  "description": "Smart Inventory, Inwarding, Bill OCR & Khata Operating System for Mobile Spare Parts",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#090d16",
+  "orientation": "portrait"
+}
