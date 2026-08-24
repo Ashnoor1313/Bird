@@ -16,6 +16,7 @@ import {
   Package,
   Receipt,
   ArrowRightLeft,
+  ArrowUpRight,
   Users,
   Wallet,
   BarChart3,
