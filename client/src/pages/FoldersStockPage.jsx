@@ -425,41 +425,49 @@ export const FoldersStockPage = () => {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => setShowScanModal(true)}
-            className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+            className="btn-primary py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs w-full sm:w-auto"
             title="Scan paper bill or invoice to auto-add stock"
           >
-            <Camera className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Scan Bill (OCR)</span>
+            <Camera className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="truncate">Scan Bill (OCR)</span>
           </button>
 
-          {!isGodown && (
+          {!isGodown ? (
             <button
               onClick={() => navigate('/sales?action=new&category=folders')}
-              className="btn-secondary py-2 px-4 text-xs shadow-xs flex items-center gap-1.5 font-bold"
+              className="btn-secondary py-2 px-3 text-xs shadow-xs flex items-center justify-center gap-1.5 font-bold w-full sm:w-auto text-zinc-900 border-zinc-300 hover:bg-zinc-100"
             >
-              <Receipt className="w-4 h-4" />
-              <span>+ CREATE BILL</span>
+              <Receipt className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="truncate">+ Create Bill</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowSendModal(true)}
+              className="btn-secondary py-2 px-3 text-xs shadow-xs flex items-center justify-center gap-1.5 font-bold w-full sm:w-auto text-zinc-900 border-zinc-300 hover:bg-zinc-100"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span className="truncate">Send Stock</span>
             </button>
           )}
 
           <button
             onClick={() => setShowManualModal(true)}
-            className="btn-secondary py-2 px-3 text-xs flex items-center gap-1.5"
+            className="btn-secondary py-2 px-3 text-xs flex items-center justify-center gap-1.5 font-semibold w-full sm:w-auto"
           >
-            <Plus className="w-4 h-4" />
-            <span>+ Add Folder</span>
+            <Plus className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">+ Add Folder</span>
           </button>
 
           <button
             onClick={handleExportExcel}
             disabled={exporting}
-            className="btn-secondary py-2 px-3 text-xs"
+            className="btn-secondary py-2 px-3 text-xs flex items-center justify-center gap-1.5 font-semibold w-full sm:w-auto"
           >
-            {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-zinc-500" />}
-            <span>Export</span>
+            {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-zinc-500 shrink-0" />}
+            <span className="truncate">Export</span>
           </button>
         </div>
       </div>
@@ -801,7 +809,74 @@ export const FoldersStockPage = () => {
             </div>
           ) : (
             <div className="bird-card overflow-hidden">
-              <table className="enterprise-table">
+              {/* MOBILE VIEW (< sm): Responsive Sales Bill Cards */}
+              <div className="block sm:hidden divide-y divide-zinc-200/80 bg-white">
+                {bills.map((b) => (
+                  <div
+                    key={b.id}
+                    onClick={() => {
+                      setSelectedInvoice(b);
+                      setShowInvoiceModal(true);
+                    }}
+                    className="p-3.5 space-y-2 hover:bg-zinc-50/60 active:bg-zinc-100/60 transition-colors cursor-pointer"
+                  >
+                    {/* Top Row: Bill No, Date & Total */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono font-bold text-xs text-blue-600">#{b.billNo}</span>
+                        <span className="text-[11px] text-zinc-400">•</span>
+                        <span className="text-[11px] text-zinc-500 font-medium">
+                          {new Date(b.createdAt).toLocaleDateString('en-IN')}
+                        </span>
+                      </div>
+                      <span className="font-extrabold text-sm text-zinc-900 tabular-nums">
+                        ₹{(b.total || 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    {/* Middle Row: Customer Name & Items */}
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="font-bold text-zinc-800 truncate">
+                        👤 {b.customerName || 'Walk-in Customer'}
+                      </div>
+                      <span className="text-[11px] text-zinc-500 font-medium bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200 shrink-0">
+                        📦 {b.items?.length || 0} Parts
+                      </span>
+                    </div>
+
+                    {/* Bottom Row: Status Badge & Print Button */}
+                    <div className="flex items-center justify-between pt-1 border-t border-zinc-100">
+                      <div>
+                        {b.dueAmount > 0 ? (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            ⚠️ Due: ₹{b.dueAmount.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            ✅ Paid Full
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => {
+                            setSelectedInvoice(b);
+                            setShowInvoiceModal(true);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-xs font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 flex items-center gap-1 shadow-2xs"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Invoice</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* DESKTOP VIEW (>= sm): Full Table */}
+              <table className="hidden sm:table enterprise-table">
                 <thead>
                   <tr>
                     <th>Bill #</th>
