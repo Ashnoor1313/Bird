@@ -22,6 +22,8 @@ export function useDashboardData(businessId, locationId = 'ALL') {
       return fetchJson(`/api/reports/dashboard?businessId=${businessId}${locQuery}`);
     },
     enabled: !!businessId,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 }
 
@@ -37,6 +39,8 @@ export function useCategoryHubData(businessId, categoryName, locationId = 'ALL')
       return fetchJson(`/api/reports/category-hub?businessId=${businessId}&categoryName=${categoryName}${locParam}`);
     },
     enabled: !!businessId && !!categoryName,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 }
 
