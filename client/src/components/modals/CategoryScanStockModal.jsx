@@ -48,6 +48,9 @@ export const CategoryScanStockModal = ({
     ? activeLocation
     : locations?.find((l) => l.type === 'GODOWN') || locations?.[0];
 
+  const targetLocationId = targetLocation?.id;
+  const targetLocationName = targetLocation?.name || 'Godown';
+
 // Fast client-side image compressor (converts 5MB camera photo to ~120KB in 15ms for instant upload)
 const compressImageFile = async (imageFile) => {
   if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
