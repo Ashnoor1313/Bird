@@ -1,5 +1,5 @@
 // MI2 Impex Service Worker - Fast Offline & Standalone App Support
-const CACHE_NAME = 'mi2-impex-v1';
+const CACHE_NAME = 'mi2-impex-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
