@@ -715,14 +715,30 @@ export const SalesPage = () => {
                       </div>
 
                       {products
-                        .filter(
-                          (p) =>
-                            p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-                            (p.model && p.model.toLowerCase().includes(productSearch.toLowerCase())) ||
-                            (p.brand && p.brand.toLowerCase().includes(productSearch.toLowerCase()))
-                        )
+                        .filter((p) => {
+                          // 1. Strict Category Isolation
+                          const isBattery = p.partType === 'Battery' ||
+                            (p.category?.name && p.category.name.toLowerCase().includes('batter')) ||
+                            /batter|cell|mah/i.test(p.name);
+                          
+                          if (billingCategoryId === 'batteries' && !isBattery) return false;
+                          if (billingCategoryId === 'folders' && isBattery) return false;
+
+                          // 2. Query Search Matching
+                          const q = productSearch.toLowerCase();
+                          return (
+                            p.name.toLowerCase().includes(q) ||
+                            (p.model && p.model.toLowerCase().includes(q)) ||
+                            (p.brand && p.brand.toLowerCase().includes(q))
+                          );
+                        })
                         .map((p) => {
-                          const stock = p.currentStock ?? 0;
+                          const locStock = p.locationStocks?.find(ls => ls.locationId === billingLocationId)?.quantity;
+                          const branchStock = locStock !== undefined ? locStock : (p.currentStock ?? 0);
+                          const totalStock = p.locationStocks && p.locationStocks.length > 0
+                            ? p.locationStocks.reduce((sum, ls) => sum + (ls.quantity || 0), 0)
+                            : (p.currentStock ?? 0);
+                          const activeLocName = locations.find(l => l.id === billingLocationId)?.name || 'Store';
 
                           return (
                             <div
@@ -750,9 +766,12 @@ export const SalesPage = () => {
                                     </span>
                                   </div>
                                   <div className="text-[10px] font-bold mt-0.5">
-                                    <span className={stock <= 0 ? 'text-rose-600' : stock <= 5 ? 'text-amber-600' : 'text-emerald-700'}>
-                                      {stock} pcs in Godown
+                                    <span className={branchStock <= 0 ? 'text-rose-600' : branchStock <= 5 ? 'text-amber-600' : 'text-emerald-700'}>
+                                      {branchStock} in {activeLocName}
                                     </span>
+                                    {totalStock !== branchStock && (
+                                      <span className="text-zinc-400 ml-1">({totalStock} Total)</span>
+                                    )}
                                   </div>
                                 </div>
 
@@ -771,15 +790,130 @@ export const SalesPage = () => {
                   )}
                 </div>
 
-                {/* Items Table */}
+                {/* Items Container */}
                 <div className="bg-zinc-50 rounded-xl border border-zinc-200 overflow-hidden">
-                  <div className="p-2 bg-zinc-100/80 border-b border-zinc-200 flex items-center justify-between text-[11px] text-zinc-500 font-bold">
+                  <div className="p-2.5 bg-zinc-100/80 border-b border-zinc-200 flex items-center justify-between text-[11px] text-zinc-500 font-bold">
                     <span>BILL LINE ITEMS ({billItems.length})</span>
                     <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                       💡 Click on any item name, qty, or rate to edit directly
                     </span>
                   </div>
-                  <table className="w-full text-left text-xs border-collapse">
+
+                  {/* MOBILE VIEW (< sm): Responsive Touch Card List */}
+                  <div className="block sm:hidden divide-y divide-zinc-200/80 bg-white">
+                    {billItems.length === 0 ? (
+                      <div className="p-6 text-center text-zinc-400 text-xs font-medium">
+                        No items added to bill yet. Search models above or upload photo.
+                      </div>
+                    ) : (
+                      billItems.map((item, idx) => {
+                        const lineTotal = (item.quantity || 1) * (item.unitPrice || 0);
+                        return (
+                          <div key={idx} className="p-3 space-y-2.5 bg-white hover:bg-zinc-50/50">
+                            {/* Top Row: Item Name, Line Total & Delete */}
+                            <div className="flex items-center justify-between gap-2">
+                              <input
+                                type="text"
+                                value={item.productName}
+                                onChange={(e) => {
+                                  const updated = [...billItems];
+                                  updated[idx].productName = e.target.value;
+                                  setBillItems(updated);
+                                }}
+                                className="flex-1 min-w-0 bg-zinc-50 border border-zinc-200 focus:border-zinc-900 rounded-lg px-2.5 py-1.5 font-bold text-xs text-zinc-900 focus:outline-none"
+                                placeholder="Edit item name..."
+                              />
+                              <div className="text-right shrink-0">
+                                <span className="font-extrabold text-sm text-emerald-600 tabular-nums">
+                                  ₹{lineTotal.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removeBillItem(idx)}
+                                className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                                title="Remove item"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Bottom Row: Quantity Stepper & Selling Rate Input */}
+                            <div className="flex items-center justify-between gap-2 pt-0.5">
+                              {/* Quantity Stepper */}
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-extrabold text-zinc-500 uppercase">Qty:</span>
+                                <div className="inline-flex items-center border border-zinc-200 rounded-lg bg-zinc-50 overflow-hidden shadow-2xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (item.quantity > 1) {
+                                        const updated = [...billItems];
+                                        updated[idx].quantity -= 1;
+                                        setBillItems(updated);
+                                      } else {
+                                        removeBillItem(idx);
+                                      }
+                                    }}
+                                    className="px-2.5 py-1 hover:bg-zinc-200 text-zinc-700 font-bold text-xs"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={item.quantity}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10) || 1;
+                                      const updated = [...billItems];
+                                      updated[idx].quantity = Math.max(1, val);
+                                      setBillItems(updated);
+                                    }}
+                                    className="w-10 text-center text-xs font-black text-zinc-900 bg-white focus:outline-none py-1"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const updated = [...billItems];
+                                      updated[idx].quantity += 1;
+                                      setBillItems(updated);
+                                    }}
+                                    className="px-2.5 py-1 hover:bg-zinc-200 text-zinc-700 font-bold text-xs"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Selling Rate Input */}
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] font-extrabold text-zinc-500 uppercase">Rate:</span>
+                                <div className="flex items-center bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1 focus-within:border-zinc-900 focus-within:bg-white shadow-2xs">
+                                  <span className="text-zinc-400 text-xs mr-0.5">₹</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={item.unitPrice}
+                                    onChange={(e) => {
+                                      const val = parseFloat(e.target.value) || 0;
+                                      const updated = [...billItems];
+                                      updated[idx].unitPrice = val;
+                                      setBillItems(updated);
+                                    }}
+                                    className="w-16 text-right font-extrabold text-xs text-zinc-900 bg-transparent focus:outline-none"
+                                    placeholder="0"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* DESKTOP VIEW (>= sm): Full Table */}
+                  <table className="hidden sm:table w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="bg-zinc-100 border-b border-zinc-200 text-zinc-700 font-bold uppercase text-[10px]">
                         <th className="p-2.5">Item / Model (Editable)</th>
