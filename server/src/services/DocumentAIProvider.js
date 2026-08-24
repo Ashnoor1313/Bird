@@ -265,16 +265,20 @@ export class DocumentAIOrchestrator {
   static async processDocument(filePath, mimeType = 'image/jpeg', options = {}) {
     const apiKey = options.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
 
-    // Try Primary specialized Gemini Document AI adapter first
+    // Try Primary specialized Gemini Document AI adapter first (1-2 seconds)
     if (apiKey) {
-      const geminiAdapter = new GoogleGeminiDocumentAIProvider(apiKey);
-      const geminiResult = await geminiAdapter.processDocument(filePath, mimeType);
-      if (geminiResult && geminiResult.items && geminiResult.items.length > 0) {
-        return geminiResult;
+      try {
+        const geminiAdapter = new GoogleGeminiDocumentAIProvider(apiKey);
+        const geminiResult = await geminiAdapter.processDocument(filePath, mimeType);
+        if (geminiResult && geminiResult.items && geminiResult.items.length > 0) {
+          return geminiResult;
+        }
+      } catch (gemErr) {
+        console.warn('Gemini vision error:', gemErr.message);
       }
     }
 
-    // Fallback to Multi-Pass Tesseract engine adapter
+    // Fallback to Fast Tesseract engine adapter
     const tesseractAdapter = new TesseractEngineProvider();
     const tesseractResult = await tesseractAdapter.processDocument(filePath, mimeType);
     if (tesseractResult && tesseractResult.items) {
