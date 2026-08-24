@@ -425,28 +425,20 @@ export const BatteriesStockPage = () => {
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => setShowScanModal(true)}
-            className="btn-primary py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs w-full sm:w-auto"
-            title="Scan paper bill or invoice to auto-add stock"
+            className="btn-primary py-2 px-3.5 text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs w-full sm:w-auto"
+            title="Upload photo / WhatsApp bill to update stock & prices"
           >
-            <Camera className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-            <span className="truncate">Scan Bill (OCR)</span>
+            <Upload className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="truncate">Upload Stock</span>
           </button>
 
-          {!isGodown ? (
+          {!isGodown && (
             <button
               onClick={() => navigate('/sales?action=new&category=batteries')}
               className="btn-secondary py-2 px-3 text-xs shadow-xs flex items-center justify-center gap-1.5 font-bold w-full sm:w-auto text-zinc-900 border-zinc-300 hover:bg-zinc-100"
             >
               <Receipt className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <span className="truncate">+ Create Bill</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => setShowSendModal(true)}
-              className="btn-secondary py-2 px-3 text-xs shadow-xs flex items-center justify-center gap-1.5 font-bold w-full sm:w-auto text-zinc-900 border-zinc-300 hover:bg-zinc-100"
-            >
-              <ArrowUpRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-              <span className="truncate">Send Stock</span>
             </button>
           )}
 

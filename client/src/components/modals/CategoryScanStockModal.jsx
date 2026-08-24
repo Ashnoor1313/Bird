@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
 import {
   X,
-  Camera,
   Upload,
-  Sparkles,
   RefreshCw,
   CheckCircle2,
-  AlertCircle,
   Plus,
   Trash2,
   Boxes,
   ArrowRight,
-  ShieldCheck,
-  Building2,
-  Layers,
+  TrendingUp,
+  Tag,
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
@@ -51,55 +47,55 @@ export const CategoryScanStockModal = ({
   const targetLocationId = targetLocation?.id;
   const targetLocationName = targetLocation?.name || 'Godown';
 
-// Fast client-side image compressor (converts 5MB camera photo to ~120KB in 15ms for instant upload)
-const compressImageFile = async (imageFile) => {
-  if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX_DIM = 1200;
-        let width = img.width;
-        let height = img.height;
+  // Fast client-side image compressor (converts 5MB camera photo to ~120KB in 15ms for instant upload)
+  const compressImageFile = async (imageFile) => {
+    if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1200;
+          let width = img.width;
+          let height = img.height;
 
-        if (width > height && width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
-        } else if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
-        }
+          if (width > height && width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
 
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
 
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(compressed);
-            } else {
-              resolve(imageFile);
-            }
-          },
-          'image/jpeg',
-          0.82
-        );
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressed);
+              } else {
+                resolve(imageFile);
+              }
+            },
+            'image/jpeg',
+            0.82
+          );
+        };
+        img.onerror = () => resolve(imageFile);
+        img.src = e.target.result;
       };
-      img.onerror = () => resolve(imageFile);
-      img.src = e.target.result;
-    };
-    reader.onerror = () => resolve(imageFile);
-    reader.readAsDataURL(imageFile);
-  });
-};
+      reader.onerror = () => resolve(imageFile);
+      reader.readAsDataURL(imageFile);
+    });
+  };
 
   const handleFileChange = async (e) => {
     const selected = e.target.files[0];
@@ -111,7 +107,7 @@ const compressImageFile = async (imageFile) => {
 
   const handleRunOcr = async () => {
     if (!file) {
-      addToast('Please upload or snap a photo of the bill first', 'error');
+      addToast('Please upload or snap a photo of your stock sheet/bill first', 'error');
       return;
     }
 
@@ -131,18 +127,21 @@ const compressImageFile = async (imageFile) => {
       if (res.ok) {
         const data = await res.json();
         setSupplierName(data.supplier?.matchedSupplierName || data.supplier?.extractedName || 'Wholesale Supplier');
-        setInvoiceNumber(data.invoiceNumber || `BILL-${Math.floor(1000 + Math.random() * 9000)}`);
+        setInvoiceNumber(data.invoiceNumber || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`);
         setConfidence(data.confidence?.overall || 88);
 
-        // Pre-process items for this category
+        // Pre-process items for this category with both Buy Price & Selling Price
         const rawItems = (data.items || []).map((item) => {
           const isExisting = Boolean(item.matchedProductId);
+          const buyPrice = parseFloat(item.unitPrice || 0);
+          const sellPrice = item.matchedProduct?.sellingPrice || (buyPrice > 0 ? Math.round(buyPrice * 1.25) : 0);
           return {
             productName: item.productName || 'Spare Part Item',
             model: item.matchedProduct?.model || item.productName || '',
             quality: item.matchedProduct?.quality || 'OEM',
             quantity: parseInt(item.quantity, 10) || 1,
-            unitPrice: parseFloat(item.unitPrice || 0),
+            unitPrice: buyPrice,
+            sellingPrice: sellPrice,
             matchedProductId: item.matchedProductId || null,
             matchedProduct: item.matchedProduct || null,
             isExisting,
@@ -156,6 +155,7 @@ const compressImageFile = async (imageFile) => {
             quality: 'OEM',
             quantity: 10,
             unitPrice: 0,
+            sellingPrice: 0,
             matchedProductId: null,
             matchedProduct: null,
             isExisting: false,
@@ -164,9 +164,9 @@ const compressImageFile = async (imageFile) => {
 
         setItems(rawItems);
         setStep('review');
-        addToast(`OCR Extracted ${rawItems.length} line items successfully!`, 'success');
+        addToast(`Extracted ${rawItems.length} items with quantities & rates!`, 'success');
       } else {
-        addToast('Failed to parse bill. Please ensure the image is clear and well lit.', 'error');
+        addToast('Failed to parse document. Please ensure the image is clear.', 'error');
       }
     } catch (err) {
       console.error('OCR Error:', err);
@@ -195,6 +195,7 @@ const compressImageFile = async (imageFile) => {
         quality: 'OEM',
         quantity: 10,
         unitPrice: 0,
+        sellingPrice: 0,
         matchedProductId: null,
         matchedProduct: null,
         isExisting: false,
@@ -233,10 +234,23 @@ const compressImageFile = async (imageFile) => {
         totalPieces += qty;
 
         const purchasePrice = parseFloat(item.unitPrice) || 0;
-        const defaultSellingPrice = purchasePrice > 0 ? Math.round(purchasePrice * 1.3) : 0;
+        const sellingPrice = parseFloat(item.sellingPrice) || 0;
 
         if (item.matchedProductId) {
-          // 1. UPDATE EXISTING PRODUCT STOCK
+          // 1. UPDATE EXISTING PRODUCT PRICES & STOCK
+          if (purchasePrice > 0 || sellingPrice > 0) {
+            await fetch(`/api/products/${item.matchedProductId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                businessId: activeBusinessId,
+                name: item.productName.trim(),
+                purchasePrice: purchasePrice > 0 ? purchasePrice : undefined,
+                sellingPrice: sellingPrice > 0 ? sellingPrice : undefined,
+              }),
+            });
+          }
+
           await fetch('/api/stock/adjust', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -246,13 +260,13 @@ const compressImageFile = async (imageFile) => {
               locationId: targetLocationId,
               quantity: qty,
               type: 'PURCHASE',
-              reference: invoiceNumber || 'OCR-INTAKE',
-              note: `OCR Intake (${supplierName}) - Added ${qty} pcs`,
+              reference: invoiceNumber || 'STOCK-UPLOAD',
+              note: `Stock Upload - Added ${qty} pcs (Cost: ₹${purchasePrice}, Sell: ₹${sellingPrice})`,
             }),
           });
           updatedCount++;
         } else {
-          // 2. CREATE NEW PRODUCT & INITIALIZE STOCK
+          // 2. CREATE NEW PRODUCT WITH BOTH PRICES & INITIALIZE STOCK
           const createRes = await fetch('/api/products', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -265,7 +279,7 @@ const compressImageFile = async (imageFile) => {
               quality: item.quality || 'OEM',
               partType: partType || (category === 'Batteries' ? 'Battery' : 'Folder / Display'),
               purchasePrice,
-              sellingPrice: defaultSellingPrice,
+              sellingPrice: sellingPrice || (purchasePrice > 0 ? Math.round(purchasePrice * 1.25) : 0),
               currentStock: qty,
               minStock: 5,
               locationId: targetLocationId,
@@ -284,7 +298,7 @@ const compressImageFile = async (imageFile) => {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
 
       addToast(
-        `Intake Complete! Added ${totalPieces} pcs (${updatedCount} updated, ${createdCount} created) to ${targetLocationName}.`,
+        `Stock Updated! Added ${totalPieces} pcs (${updatedCount} updated, ${createdCount} created) to ${targetLocationName}.`,
         'success'
       );
 
@@ -292,7 +306,7 @@ const compressImageFile = async (imageFile) => {
       handleClose();
     } catch (err) {
       console.error('Error during stock intake:', err);
-      addToast('Failed to complete stock intake', 'error');
+      addToast('Failed to complete stock update', 'error');
       setStep('review');
     }
   };
@@ -314,73 +328,78 @@ const compressImageFile = async (imageFile) => {
         <div className="p-3.5 sm:p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/90 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs shrink-0">
-              <Camera className="w-4 h-4 text-emerald-400" />
+              <Upload className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <h3 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
-                  Scan & Add {category} Stock
+                <h3 className="text-sm font-bold text-slate-900 truncate">
+                  Upload & Update {category} Stock
                 </h3>
-                <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
                   AI OCR
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium truncate mt-0.5">
+              <p className="text-[11px] text-slate-500 font-medium truncate">
                 Receiving into: <strong className="text-slate-800 font-bold">{targetLocationName}</strong>
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={handleClose}
-            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer shrink-0 ml-2"
+            className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/60 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-3 sm:p-5 overflow-y-auto flex-1 space-y-3.5">
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
           {step === 'upload' && (
             <div className="space-y-4">
-              {/* Dropzone */}
-              <label
-                htmlFor="ocr-bill-input"
-                className="border-2 border-dashed border-slate-300 hover:border-slate-800 bg-slate-50/60 hover:bg-slate-50 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all space-y-3 group"
-              >
+              <div className="border-2 border-dashed border-slate-200 hover:border-slate-400 bg-slate-50/50 rounded-2xl p-6 sm:p-8 text-center transition-colors relative">
                 <input
-                  id="ocr-bill-input"
                   type="file"
-                  accept="image/*,.pdf"
-                  capture="environment"
-                  className="hidden"
+                  accept="image/*"
                   onChange={handleFileChange}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                 />
-                <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 shadow-xs flex items-center justify-center group-hover:scale-105 transition-transform text-slate-800">
-                  {previewUrl ? (
-                    <img src={previewUrl} alt="Bill Preview" className="w-full h-full object-cover rounded-2xl" />
-                  ) : (
-                    <Upload className="w-6 h-6 text-slate-500" />
-                  )}
-                </div>
+                
+                {previewUrl ? (
+                  <div className="space-y-3">
+                    <img
+                      src={previewUrl}
+                      alt="Bill preview"
+                      className="max-h-48 sm:max-h-60 mx-auto rounded-xl shadow-md object-contain border border-slate-200"
+                    />
+                    <p className="text-xs font-bold text-slate-700">
+                      {file?.name}
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Supports mobile camera capture, paper invoices, wholesale receipts & WhatsApp bill screenshots
+                    </p>
+                    <div className="inline-flex items-center gap-1 text-xs text-blue-600 font-bold bg-blue-50 px-3 py-1 rounded-lg">
+                      <span>Change File</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mx-auto text-slate-700 shadow-2xs">
+                      <Upload className="w-6 h-6 text-slate-700" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-slate-800">
+                        Drop your stock bill here, or <span className="text-blue-600 underline">browse</span>
+                      </p>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Supports photo of handwritten lists, supplier invoices, WhatsApp bill screenshots
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900">
-                    {file ? file.name : 'Take photo or upload supplier bill'}
-                  </h4>
-                  <p className="text-xs text-slate-500 font-medium mt-1 max-w-md">
-                    Supports mobile camera capture, paper invoices, wholesale receipts & WhatsApp bill screenshots
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="btn-secondary py-1.5 px-3 text-xs pointer-events-none">
-                    Browse File
-                  </span>
-                  <span className="text-xs text-slate-400">or tap to photograph</span>
-                </div>
-              </label>
-
-              {file && (
+              {previewUrl && (
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     type="button"
@@ -388,25 +407,25 @@ const compressImageFile = async (imageFile) => {
                       setFile(null);
                       setPreviewUrl(null);
                     }}
-                    className="btn-secondary py-2 px-3 text-xs font-bold"
+                    className="btn-secondary py-2.5 px-4 text-xs font-bold"
                   >
                     Clear
                   </button>
                   <button
                     type="button"
-                    onClick={handleRunOcr}
                     disabled={scanning}
-                    className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-2"
+                    onClick={handleRunOcr}
+                    className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2 shadow-md"
                   >
                     {scanning ? (
                       <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                        <span>Running AI OCR...</span>
+                        <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                        <span>Running AI OCR (1-2s)...</span>
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-4 h-4 text-amber-300" />
-                        <span>Extract & Match Line Items</span>
+                        <Upload className="w-4 h-4 text-emerald-400" />
+                        <span>Extract Stock & Rates</span>
                       </>
                     )}
                   </button>
@@ -416,67 +435,51 @@ const compressImageFile = async (imageFile) => {
           )}
 
           {step === 'review' && (
-            <div className="space-y-3">
-              {/* Supplier & Bill Info Card */}
-              <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="bg-white p-2 rounded-lg border border-slate-200/80">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Supplier Name</span>
-                    <input
-                      type="text"
-                      value={supplierName}
-                      onChange={(e) => setSupplierName(e.target.value)}
-                      placeholder="e.g. Wholesale Supplier"
-                      className="w-full font-bold text-xs text-slate-900 bg-transparent outline-none pt-0.5"
-                    />
+            <div className="space-y-4">
+              {/* Header Info */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                    <CheckCircle2 className="w-5 h-5" />
                   </div>
-                  <div className="bg-white p-2 rounded-lg border border-slate-200/80">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Bill / Invoice #</span>
-                    <input
-                      type="text"
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
-                      placeholder="e.g. INV-1029"
-                      className="w-full font-bold text-xs text-slate-900 bg-transparent outline-none pt-0.5"
-                    />
+                  <div>
+                    <h4 className="text-xs font-black text-slate-900">Review & Set Selling Prices</h4>
+                    <p className="text-[11px] text-slate-500 font-medium">
+                      Enter/adjust quantities, cost prices & selling rates before inwarding
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
-                    ✓ {confidence}% OCR Confidence
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddItem}
-                    className="btn-secondary py-1 px-2.5 text-xs font-bold flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Add Item</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleAddItem}
+                  className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5 text-slate-700" />
+                  <span>+ Add Row</span>
+                </button>
               </div>
 
               {/* Items List (Mobile Adaptive Cards + Desktop Table) */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs text-slate-500 font-bold px-1">
-                  <span>Extracted Line Items ({items.length})</span>
-                  <span>Total Pcs: {items.reduce((sum, i) => sum + (parseInt(i.quantity, 10) || 0), 0)}</span>
+                  <span>Items Extracted ({items.length})</span>
+                  <span>Total Pieces: <strong className="text-slate-900">{items.reduce((sum, i) => sum + (parseInt(i.quantity, 10) || 0), 0)} pcs</strong></span>
                 </div>
 
                 {/* Mobile Cards (visible on < sm) */}
-                <div className="block sm:hidden space-y-2">
+                <div className="block sm:hidden space-y-2.5">
                   {items.map((item, idx) => (
-                    <div key={idx} className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-2xs">
+                    <div key={idx} className="bg-white border border-slate-200 rounded-2xl p-3 space-y-2.5 shadow-xs">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1">
-                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Item Model / Title</label>
+                          <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Model / Spare Part Name</label>
                           <input
                             type="text"
                             value={item.productName}
                             onChange={(e) => handleUpdateItem(idx, 'productName', e.target.value)}
                             placeholder="Enter item model name"
-                            className="w-full text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 mt-0.5 focus:border-slate-900 focus:bg-white outline-none"
+                            className="w-full text-xs font-bold text-slate-900 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 mt-0.5 focus:border-slate-900 focus:bg-white outline-none"
                           />
                         </div>
                         <button
@@ -489,9 +492,9 @@ const compressImageFile = async (imageFile) => {
                         </button>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-200/70">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Quantity (Pcs)</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70">
+                          <span className="text-[9px] font-bold text-slate-500 uppercase block">Qty (Pcs)</span>
                           <input
                             type="number"
                             min="1"
@@ -500,8 +503,8 @@ const compressImageFile = async (imageFile) => {
                             className="w-full text-xs font-black text-slate-900 bg-transparent outline-none mt-0.5"
                           />
                         </div>
-                        <div className="bg-slate-50 p-2 rounded-lg border border-slate-200/70">
-                          <span className="text-[9px] font-bold text-slate-400 uppercase block">Buy Rate (₹)</span>
+                        <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/70">
+                          <span className="text-[9px] font-bold text-slate-500 uppercase block">Cost / Buy (₹)</span>
                           <input
                             type="number"
                             min="0"
@@ -510,18 +513,29 @@ const compressImageFile = async (imageFile) => {
                             className="w-full text-xs font-black text-slate-900 bg-transparent outline-none mt-0.5"
                           />
                         </div>
+                        <div className="bg-emerald-50/70 p-2 rounded-xl border border-emerald-200/80">
+                          <span className="text-[9px] font-bold text-emerald-800 uppercase block">Selling Rate (₹)</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.sellingPrice}
+                            onChange={(e) => handleUpdateItem(idx, 'sellingPrice', e.target.value)}
+                            placeholder="Sale ₹"
+                            className="w-full text-xs font-black text-emerald-950 bg-transparent outline-none mt-0.5"
+                          />
+                        </div>
                       </div>
 
-                      <div className="pt-1">
+                      <div className="pt-0.5">
                         {item.matchedProductId ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md w-full justify-center">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg w-full justify-center">
                             <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                            <span className="truncate">Updates #{item.matchedProduct?.itemCode || 'Existing Stock'}</span>
+                            <span className="truncate">Updates Existing Catalog Item</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md w-full justify-center">
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg w-full justify-center">
                             <Plus className="w-3 h-3 text-amber-600 shrink-0" />
-                            <span>Auto-Creates New Catalog Item</span>
+                            <span>Adds as New Catalog Model</span>
                           </span>
                         )}
                       </div>
@@ -530,15 +544,16 @@ const compressImageFile = async (imageFile) => {
                 </div>
 
                 {/* Desktop Table (visible on sm and up) */}
-                <div className="hidden sm:block border border-slate-200 rounded-xl overflow-hidden">
+                <div className="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-semibold">
                       <tr>
                         <th className="py-2.5 px-3">Item / Model Name</th>
-                        <th className="py-2.5 px-2 text-center w-24">Qty (Pcs)</th>
-                        <th className="py-2.5 px-2 text-right w-28">Buy Rate (₹)</th>
-                        <th className="py-2.5 px-3 w-48">Intake Action</th>
-                        <th className="py-2.5 px-2 text-center w-12"></th>
+                        <th className="py-2.5 px-2 text-center w-20">Qty (Pcs)</th>
+                        <th className="py-2.5 px-2 text-right w-24">Buy Rate (₹)</th>
+                        <th className="py-2.5 px-2 text-right w-28 bg-emerald-50/50 text-emerald-900 font-bold">Selling Rate (₹)</th>
+                        <th className="py-2.5 px-3 w-40">Catalog Action</th>
+                        <th className="py-2.5 px-2 text-center w-10"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -558,7 +573,7 @@ const compressImageFile = async (imageFile) => {
                               min="1"
                               value={item.quantity}
                               onChange={(e) => handleUpdateItem(idx, 'quantity', e.target.value)}
-                              className="w-16 text-center text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1 focus:ring-1 focus:ring-slate-900"
+                              className="w-14 text-center text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1 focus:ring-1 focus:ring-slate-900"
                             />
                           </td>
                           <td className="py-2 px-2 text-right">
@@ -567,19 +582,29 @@ const compressImageFile = async (imageFile) => {
                               min="0"
                               value={item.unitPrice}
                               onChange={(e) => handleUpdateItem(idx, 'unitPrice', e.target.value)}
-                              className="w-20 text-right text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1 focus:ring-1 focus:ring-slate-900"
+                              className="w-18 text-right text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1 focus:ring-1 focus:ring-slate-900"
+                            />
+                          </td>
+                          <td className="py-2 px-2 text-right bg-emerald-50/30">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.sellingPrice}
+                              onChange={(e) => handleUpdateItem(idx, 'sellingPrice', e.target.value)}
+                              placeholder="Sale ₹"
+                              className="w-20 text-right text-xs font-bold text-emerald-950 bg-emerald-50/60 border border-emerald-200 rounded-lg py-1 focus:ring-1 focus:ring-emerald-700"
                             />
                           </td>
                           <td className="py-2 px-3">
                             {item.matchedProductId ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
-                                <span className="truncate">Updates #{item.matchedProduct?.itemCode || 'Stock'}</span>
+                                <span className="truncate">Updates Existing</span>
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg">
                                 <Plus className="w-3 h-3 text-amber-600 shrink-0" />
-                                <span>Creates New Item</span>
+                                <span>Creates New</span>
                               </span>
                             )}
                           </td>
@@ -588,7 +613,7 @@ const compressImageFile = async (imageFile) => {
                               type="button"
                               onClick={() => handleRemoveItem(idx)}
                               className="p-1 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer"
-                              title="Remove line item"
+                              title="Remove item"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -600,44 +625,36 @@ const compressImageFile = async (imageFile) => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+              {/* Actions */}
+              <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setStep('upload')}
-                  className="btn-secondary py-2 px-3 text-xs font-bold order-2 sm:order-1"
+                  className="btn-secondary py-2.5 px-4 text-xs font-bold"
                 >
-                  Back to Upload
+                  ← Re-Upload
                 </button>
-
-                <div className="flex items-center justify-between sm:justify-end gap-3 order-1 sm:order-2">
-                  <span className="text-xs text-slate-500 font-semibold hidden sm:inline">
-                    Total:{' '}
-                    <strong className="text-slate-900 font-bold">
-                      {items.reduce((sum, i) => sum + (parseInt(i.quantity, 10) || 0), 0)} pcs
-                    </strong>
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={handleConfirmStockIntake}
-                    className="btn-primary py-2.5 px-4 text-xs font-bold flex items-center justify-center gap-2 shadow-sm flex-1 sm:flex-initial"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Inward to {targetLocationName}</span>
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleConfirmStockIntake}
+                  className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2 shadow-md"
+                >
+                  <span>Inward Stock & Update Prices</span>
+                  <ArrowRight className="w-4 h-4 text-emerald-400" />
+                </button>
               </div>
             </div>
           )}
 
           {step === 'saving' && (
-            <div className="py-16 text-center space-y-4">
-              <RefreshCw className="w-8 h-8 text-slate-900 animate-spin mx-auto" />
-              <div>
-                <h4 className="font-bold text-sm text-slate-900">Inwarding Stock & Updating Catalog...</h4>
-                <p className="text-xs text-slate-500 font-medium mt-1">
-                  Updating physical stock quantities for {targetLocationName}
+            <div className="py-12 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto shadow-sm">
+                <RefreshCw className="w-7 h-7 animate-spin" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-base font-black text-slate-900">Inwarding Stock into {targetLocationName}...</h4>
+                <p className="text-xs text-slate-500 font-medium">
+                  Updating stock quantities and saving buy & selling rates to cloud database
                 </p>
               </div>
             </div>
@@ -647,5 +664,3 @@ const compressImageFile = async (imageFile) => {
     </div>
   );
 };
-
-export default CategoryScanStockModal;

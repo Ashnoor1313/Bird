@@ -220,7 +220,7 @@ const GodownDashboard = ({ data, activeBusiness, activeLocation, locations, sele
                 <Package className="w-3.5 h-3.5" /><span>Manage Stock</span>
               </button>
               <button onClick={() => navigate('/folders')} className="btn-secondary py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-emerald-600" /><span>Scan Bill</span>
+                <Upload className="w-3.5 h-3.5 text-emerald-600" /><span>Upload Stock</span>
               </button>
             </div>
           </div>
@@ -265,7 +265,7 @@ const GodownDashboard = ({ data, activeBusiness, activeLocation, locations, sele
                 <BatteryCharging className="w-3.5 h-3.5" /><span>Manage Stock</span>
               </button>
               <button onClick={() => navigate('/batteries')} className="btn-secondary py-2 px-3 text-xs font-bold flex items-center justify-center gap-1.5">
-                <Camera className="w-3.5 h-3.5 text-emerald-600" /><span>Scan Bill</span>
+                <Upload className="w-3.5 h-3.5 text-emerald-600" /><span>Upload Stock</span>
               </button>
             </div>
           </div>
