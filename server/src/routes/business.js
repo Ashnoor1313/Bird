@@ -131,16 +131,16 @@ router.post('/:id/clean-slate', async (req, res) => {
   try {
     const businessId = req.params.id;
 
-    // Delete in relational order
+    // Delete in strict foreign-key dependency order
+    await prisma.customerLedger.deleteMany({ where: { businessId } });
+    await prisma.supplierLedger.deleteMany({ where: { businessId } });
+    await prisma.payment.deleteMany({ where: { businessId } });
     await prisma.saleItem.deleteMany({});
     await prisma.sale.deleteMany({ where: { businessId } });
     await prisma.purchaseItem.deleteMany({});
     await prisma.purchase.deleteMany({ where: { businessId } });
     await prisma.stockMovement.deleteMany({ where: { businessId } });
     await prisma.locationStock.deleteMany({ where: { businessId } });
-    await prisma.orderItem.deleteMany({});
-    await prisma.order.deleteMany({ where: { businessId } });
-    await prisma.paymentTransaction.deleteMany({ where: { businessId } });
     await prisma.product.deleteMany({ where: { businessId } });
     await prisma.customer.deleteMany({ where: { businessId } });
     await prisma.supplier.deleteMany({ where: { businessId } });

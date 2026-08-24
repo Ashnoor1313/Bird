@@ -55,6 +55,10 @@ export const SettingsPage = () => {
   const [confirmAdminPass, setConfirmAdminPass] = useState('');
   const [changePassLoading, setChangePassLoading] = useState(false);
 
+  // Clean Slate Fresh Start Modal State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
   const [formData, setFormData] = useState({
     name: activeBusiness?.name || '',
     phone: activeBusiness?.phone || '',
@@ -263,26 +267,27 @@ export const SettingsPage = () => {
   };
 
   const handleCleanSlateReset = async () => {
-    if (!window.confirm('⚠️ ARE YOU SURE? This will permanently delete all products, stock, sales bills, and customers to start 100% fresh. This cannot be undone!')) {
-      return;
-    }
-
+    setIsResetting(true);
     try {
       const res = await fetch(`/api/businesses/${activeBusinessId}/clean-slate`, {
         method: 'POST',
       });
 
       if (res.ok) {
+        setShowResetModal(false);
         addToast('✨ All data erased successfully! Ready for a 100% fresh start.', 'success');
         queryClient.invalidateQueries();
         setTimeout(() => {
           window.location.href = '/';
-        }, 800);
+        }, 600);
       } else {
-        addToast('Failed to reset data', 'error');
+        const errData = await res.json().catch(() => ({}));
+        addToast(errData.message || errData.error || 'Failed to reset data', 'error');
       }
     } catch (err) {
-      addToast('Error resetting data', 'error');
+      addToast('Error resetting data: ' + err.message, 'error');
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -540,7 +545,7 @@ export const SettingsPage = () => {
         </div>
         <button
           type="button"
-          onClick={handleCleanSlateReset}
+          onClick={() => setShowResetModal(true)}
           className="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs shrink-0 flex items-center justify-center gap-1.5 active:scale-95 transition-all"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -1182,6 +1187,76 @@ export const SettingsPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* LUXURY CUSTOM RESET CONFIRMATION MODAL POPUP */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/70 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl border border-zinc-200/80 space-y-5">
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900">Erase All Data & Start Fresh?</h3>
+                  <p className="text-[11px] text-zinc-500 font-semibold">100% Clean Slate Reset</p>
+                </div>
+              </div>
+              <button
+                disabled={isResetting}
+                onClick={() => setShowResetModal(false)}
+                className="text-zinc-400 hover:text-zinc-700 p-1.5 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs text-zinc-600 bg-rose-50/60 p-4 rounded-2xl border border-rose-100">
+              <p className="font-bold text-rose-900">
+                This action will permanently delete:
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-rose-800 font-medium text-[11px]">
+                <li>All products, spare parts & stock counts across all stores</li>
+                <li>All sales bills, invoices & customer khata records</li>
+                <li>All wholesale purchase entries & supplier ledgers</li>
+                <li>All payment transactions and account balances (reset to ₹0)</li>
+              </ul>
+              <p className="text-[11px] text-zinc-500 pt-1 border-t border-rose-200/60">
+                🏪 <strong>MI2 Impex</strong>, store locations (<strong>Godown, Store 1, Store 2</strong>), and categories will remain ready for fresh inventory entries.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={() => setShowResetModal(false)}
+                className="flex-1 py-3 rounded-2xl bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={handleCleanSlateReset}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-lg shadow-rose-600/30 flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                {isResetting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Erasing Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Yes, Erase & Start Fresh</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
