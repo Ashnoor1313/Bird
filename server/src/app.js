@@ -203,6 +203,8 @@ async function initBaselineData() {
         });
         console.log(`✅ Created location: ${loc.name}`);
       }
+    }
+
     // Ensure common stock synchronization across Godown, Store 1, Store 2
     const { StockEngine } = await import('./services/StockEngine.js');
     await StockEngine.syncBusinessStocks(business.id);
