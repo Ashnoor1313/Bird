@@ -203,9 +203,11 @@ async function initBaselineData() {
         });
         console.log(`✅ Created location: ${loc.name}`);
       }
-    }
+    // Ensure common stock synchronization across Godown, Store 1, Store 2
+    const { StockEngine } = await import('./services/StockEngine.js');
+    await StockEngine.syncBusinessStocks(business.id);
 
-    console.log('✅ Baseline business, locations, and categories verified and ready.');
+    console.log('✅ Baseline business, locations, categories, and common inventory synchronized and ready.');
   } catch (err) {
     console.warn('Database baseline initialization notice:', err.message);
   }

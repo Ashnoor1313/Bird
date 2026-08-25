@@ -3,7 +3,7 @@ import prisma from '../prisma.js';
 export class StockEngine {
   /**
    * Ensure default locations exist for a business (Godown, Store 1, Store 2).
-   * Migrates existing unallocated product stock into Godown.
+   * Migrates and synchronizes product stock across all locations (common inventory).
    */
   static async ensureDefaultLocations(businessId, tx = prisma) {
     let locations = await tx.location.findMany({
@@ -41,41 +41,146 @@ export class StockEngine {
       });
 
       locations = [godown, store1, store2];
+    }
 
-      // Migrate existing product stocks to Godown
-      const products = await tx.product.findMany({ where: { businessId } });
-      for (const p of products) {
-        if (p.currentStock > 0) {
-          await tx.locationStock.upsert({
-            where: {
-              businessId_locationId_productId: {
-                businessId,
-                locationId: godown.id,
-                productId: p.id,
-              },
-            },
-            create: {
+    // Synchronize all products to all active locations (Common Inventory)
+    const products = await tx.product.findMany({ where: { businessId, status: 'ACTIVE' } });
+    for (const p of products) {
+      const totalQty = p.currentStock || 0;
+      const goodQty = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : totalQty;
+      const defQty = p.defectiveStock || 0;
+      const testQty = p.testingStock || 0;
+
+      for (const loc of locations) {
+        await tx.locationStock.upsert({
+          where: {
+            businessId_locationId_productId: {
               businessId,
-              locationId: godown.id,
+              locationId: loc.id,
               productId: p.id,
-              goodStock: p.goodStock || p.currentStock,
-              defectiveStock: p.defectiveStock || 0,
-              testingStock: p.testingStock || 0,
-              quantity: p.currentStock,
-              minStock: p.minStock || 5,
             },
-            update: {
-              goodStock: p.goodStock || p.currentStock,
-              defectiveStock: p.defectiveStock || 0,
-              testingStock: p.testingStock || 0,
-              quantity: p.currentStock,
-            },
-          });
-        }
+          },
+          create: {
+            businessId,
+            locationId: loc.id,
+            productId: p.id,
+            goodStock: goodQty,
+            defectiveStock: defQty,
+            testingStock: testQty,
+            quantity: totalQty,
+            minStock: p.minStock || 5,
+          },
+          update: {
+            goodStock: goodQty,
+            defectiveStock: defQty,
+            testingStock: testQty,
+            quantity: totalQty,
+          },
+        });
       }
     }
 
     return locations;
+  }
+
+  /**
+   * Synchronize all locations' LocationStock for a whole business to match Product.currentStock.
+   */
+  static async syncBusinessStocks(businessId, tx = prisma) {
+    if (!businessId) return;
+    const locations = await tx.location.findMany({
+      where: { businessId },
+    });
+    if (locations.length === 0) {
+      return await this.ensureDefaultLocations(businessId, tx);
+    }
+
+    const products = await tx.product.findMany({
+      where: { businessId, status: 'ACTIVE' },
+    });
+
+    for (const p of products) {
+      const totalQty = p.currentStock || 0;
+      const goodQty = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : totalQty;
+      const defQty = p.defectiveStock || 0;
+      const testQty = p.testingStock || 0;
+
+      for (const loc of locations) {
+        await tx.locationStock.upsert({
+          where: {
+            businessId_locationId_productId: {
+              businessId,
+              locationId: loc.id,
+              productId: p.id,
+            },
+          },
+          create: {
+            businessId,
+            locationId: loc.id,
+            productId: p.id,
+            goodStock: goodQty,
+            defectiveStock: defQty,
+            testingStock: testQty,
+            quantity: totalQty,
+            minStock: p.minStock || 5,
+          },
+          update: {
+            goodStock: goodQty,
+            defectiveStock: defQty,
+            testingStock: testQty,
+            quantity: totalQty,
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Synchronize single product stock across all locations of the business.
+   */
+  static async syncProductLocationStocks(businessId, productId, tx = prisma) {
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product) return;
+
+    let locations = await tx.location.findMany({
+      where: { businessId },
+    });
+    if (locations.length === 0) {
+      locations = await this.ensureDefaultLocations(businessId, tx);
+    }
+
+    const totalQty = product.currentStock || 0;
+    const goodQty = product.goodStock !== undefined && product.goodStock !== null ? product.goodStock : totalQty;
+    const defQty = product.defectiveStock || 0;
+    const testQty = product.testingStock || 0;
+
+    for (const loc of locations) {
+      await tx.locationStock.upsert({
+        where: {
+          businessId_locationId_productId: {
+            businessId,
+            locationId: loc.id,
+            productId,
+          },
+        },
+        create: {
+          businessId,
+          locationId: loc.id,
+          productId,
+          goodStock: goodQty,
+          defectiveStock: defQty,
+          testingStock: testQty,
+          quantity: totalQty,
+          minStock: product.minStock || 5,
+        },
+        update: {
+          goodStock: goodQty,
+          defectiveStock: defQty,
+          testingStock: testQty,
+          quantity: totalQty,
+        },
+      });
+    }
   }
 
   /**
@@ -87,143 +192,124 @@ export class StockEngine {
   }
 
   /**
-   * Get stock quantity for a specific product and location.
+   * Get stock quantity for a specific product and location (reflects common inventory).
    */
   static async getLocationStock(businessId, locationId, productId, tx = prisma) {
-    const locStock = await tx.locationStock.findUnique({
-      where: {
-        businessId_locationId_productId: {
-          businessId,
-          locationId,
-          productId,
-        },
-      },
-    });
-    return locStock || { goodStock: 0, defectiveStock: 0, testingStock: 0, reservedStock: 0, quantity: 0, minStock: 5 };
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product) {
+      return { goodStock: 0, defectiveStock: 0, testingStock: 0, reservedStock: 0, quantity: 0, minStock: 5 };
+    }
+    const totalQty = product.currentStock || 0;
+    const goodQty = product.goodStock !== undefined && product.goodStock !== null ? product.goodStock : totalQty;
+    return {
+      goodStock: goodQty,
+      defectiveStock: product.defectiveStock || 0,
+      testingStock: product.testingStock || 0,
+      reservedStock: 0,
+      quantity: totalQty,
+      minStock: product.minStock || 5,
+    };
   }
 
   /**
-   * Record a stock movement and update location stock + total business stock.
-   * Respects business.allowNegativeStock policy.
+   * Record a stock movement and update common stock across all locations (Godown, Store 1, Store 2).
+   * As soon as a bill is created or new stock is added, the stock updates everywhere in real-time.
    */
   static async recordMovement(
-    { businessId, productId, locationId, type, quantity, stockState = 'GOOD', reference, note, createdBy },
+    { businessId, productId, locationId, categoryId, type, quantity, stockState = 'GOOD', reference, note, createdBy },
     tx = prisma
   ) {
-    let targetLocationId = locationId;
-    if (!targetLocationId) {
-      const defaultGodown = await this.getDefaultGodown(businessId, tx);
-      targetLocationId = defaultGodown.id;
-    }
-
     const business = await tx.business.findUnique({ where: { id: businessId } });
-    const allowNegativeStock = business?.allowNegativeStock || false;
+    const allowNegativeStock = business?.allowNegativeStock ?? true;
 
     const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) {
       throw new Error(`Product with ID ${productId} not found`);
     }
 
-    // Get current Godown location stock
-    const currentLocStock = await tx.locationStock.findUnique({
-      where: {
-        businessId_locationId_productId: {
-          businessId,
-          locationId: targetLocationId,
-          productId,
-        },
-      },
-    });
+    let prevGood = product.goodStock !== undefined && product.goodStock !== null ? product.goodStock : (product.currentStock || 0);
+    let prevDefective = product.defectiveStock || 0;
+    let prevTesting = product.testingStock || 0;
 
-    let prevLocGood = currentLocStock?.goodStock || 0;
-    let prevLocDefective = currentLocStock?.defectiveStock || 0;
-    let prevLocTesting = currentLocStock?.testingStock || 0;
-    let prevLocReserved = currentLocStock?.reservedStock || 0;
-
-    // Stock can go negative during billing; user can adjust when new inventory arrives
     if (stockState === 'GOOD') {
-      prevLocGood = prevLocGood + quantity;
+      prevGood = prevGood + quantity;
     } else if (stockState === 'DEFECTIVE') {
-      prevLocDefective = prevLocDefective + quantity;
+      prevDefective = prevDefective + quantity;
     } else if (stockState === 'TESTING') {
-      prevLocTesting = prevLocTesting + quantity;
+      prevTesting = prevTesting + quantity;
     }
 
-    const newLocTotal = prevLocGood + prevLocDefective + prevLocTesting + prevLocReserved;
+    const newProductTotal = prevGood + prevDefective + prevTesting;
 
-    // Upsert LocationStock
-    await tx.locationStock.upsert({
-      where: {
-        businessId_locationId_productId: {
-          businessId,
-          locationId: targetLocationId,
-          productId,
-        },
-      },
-      create: {
-        businessId,
-        locationId: targetLocationId,
-        productId,
-        goodStock: stockState === 'GOOD' ? (allowNegativeStock ? quantity : Math.max(0, quantity)) : 0,
-        defectiveStock: stockState === 'DEFECTIVE' ? (allowNegativeStock ? quantity : Math.max(0, quantity)) : 0,
-        testingStock: stockState === 'TESTING' ? (allowNegativeStock ? quantity : Math.max(0, quantity)) : 0,
-        quantity: allowNegativeStock ? quantity : Math.max(0, quantity),
-        minStock: product.minStock || 5,
-      },
-      update: {
-        goodStock: prevLocGood,
-        defectiveStock: prevLocDefective,
-        testingStock: prevLocTesting,
-        quantity: newLocTotal,
-      },
-    });
-
-    // Aggregate overall product stock across all locations
-    const allLocStocks = await tx.locationStock.aggregate({
-      where: { businessId, productId },
-      _sum: {
-        quantity: true,
-        goodStock: true,
-        defectiveStock: true,
-        testingStock: true,
-      },
-    });
-
-    const totalCurrentStock = allLocStocks._sum.quantity || 0;
-    const totalGoodStock = allLocStocks._sum.goodStock || 0;
-    const totalDefectiveStock = allLocStocks._sum.defectiveStock || 0;
-    const totalTestingStock = allLocStocks._sum.testingStock || 0;
-
-    // Update Product Table total
+    // 1. Update Product table total
     await tx.product.update({
       where: { id: productId },
       data: {
-        currentStock: totalCurrentStock,
-        goodStock: totalGoodStock,
-        defectiveStock: totalDefectiveStock,
-        testingStock: totalTestingStock,
+        currentStock: newProductTotal,
+        goodStock: prevGood,
+        defectiveStock: prevDefective,
+        testingStock: prevTesting,
       },
     });
 
-    // Create Stock Movement record
+    // 2. Ensure active locations exist (Godown, Store 1, Store 2)
+    let locations = await tx.location.findMany({
+      where: { businessId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (locations.length === 0) {
+      locations = await this.ensureDefaultLocations(businessId, tx);
+    }
+
+    // 3. Synchronize LocationStock for ALL locations (Godown, Store 1, Store 2) with the common stock
+    for (const loc of locations) {
+      await tx.locationStock.upsert({
+        where: {
+          businessId_locationId_productId: {
+            businessId,
+            locationId: loc.id,
+            productId,
+          },
+        },
+        create: {
+          businessId,
+          locationId: loc.id,
+          productId,
+          goodStock: prevGood,
+          defectiveStock: prevDefective,
+          testingStock: prevTesting,
+          quantity: newProductTotal,
+          minStock: product.minStock || 5,
+        },
+        update: {
+          goodStock: prevGood,
+          defectiveStock: prevDefective,
+          testingStock: prevTesting,
+          quantity: newProductTotal,
+        },
+      });
+    }
+
+    // 4. Create Stock Movement audit record
     const movement = await tx.stockMovement.create({
       data: {
         businessId,
         productId,
-        toLocationId: quantity > 0 ? targetLocationId : null,
-        fromLocationId: quantity < 0 ? targetLocationId : null,
+        categoryId: categoryId || product.categoryId || (product.partType === 'Battery' ? 'batteries' : 'folders'),
+        toLocationId: quantity > 0 ? (locationId || locations[0]?.id) : null,
+        fromLocationId: quantity < 0 ? (locationId || locations[0]?.id) : null,
         type,
         quantity,
         previousStock: product.currentStock,
-        newStock: totalCurrentStock,
+        newStock: newProductTotal,
         stockState,
         reference,
-        note: note || (newLocTotal < 0 ? '⚠ Negative Stock Transaction' : 'Stock Movement'),
+        note: note || (newProductTotal < 0 ? '⚠ Negative Stock Transaction' : 'Stock Movement'),
         createdBy,
       },
     });
 
-    return { movement, previousStock: product.currentStock, newStock: totalCurrentStock };
+    return { movement, previousStock: product.currentStock, newStock: newProductTotal };
   }
 
   /**

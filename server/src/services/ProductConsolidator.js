@@ -142,6 +142,10 @@ export class ProductConsolidator {
           testingStock: totalTesting,
         },
       });
+
+      // Synchronize all locations to common inventory for primary product
+      const { StockEngine } = await import('./StockEngine.js');
+      await StockEngine.syncProductLocationStocks(businessId, primary.id);
     }
 
     return {

@@ -83,6 +83,7 @@ async function runCriticalSpecTests() {
         purchasePrice: 300,
         sellingPrice: 450,
         currentStock: 300,
+        goodStock: 300,
       },
     });
 
@@ -96,50 +97,12 @@ async function runCriticalSpecTests() {
         purchasePrice: 200,
         sellingPrice: 350,
         currentStock: 200,
-      },
-    });
-
-    // Initialize Godown Stock
-    await prisma.locationStock.create({
-      data: {
-        businessId: business.id,
-        locationId: godown.id,
-        productId: folderProduct.id,
-        goodStock: 300,
-        quantity: 300,
-      },
-    });
-
-    await prisma.locationStock.create({
-      data: {
-        businessId: business.id,
-        locationId: godown.id,
-        productId: batteryProduct.id,
         goodStock: 200,
-        quantity: 200,
       },
     });
 
-    // Initialize Store 1 Stocks
-    await prisma.locationStock.create({
-      data: {
-        businessId: business.id,
-        locationId: store1.id,
-        productId: folderProduct.id,
-        goodStock: 40,
-        quantity: 40,
-      },
-    });
-
-    await prisma.locationStock.create({
-      data: {
-        businessId: business.id,
-        locationId: store1.id,
-        productId: batteryProduct.id,
-        goodStock: 30,
-        quantity: 30,
-      },
-    });
+    // Synchronize initial stocks to all locations
+    await StockEngine.syncBusinessStocks(business.id);
 
     // ----------------------------------------------------
     // TEST 1: Customer Isolation (Store 1 -> Folders)
@@ -221,7 +184,7 @@ async function runCriticalSpecTests() {
     );
 
     // ----------------------------------------------------
-    // TEST 4: Store 1 Folders Stock Deduction
+    // TEST 4: Common Inventory Stock Deduction on Sale
     // ----------------------------------------------------
     // Sell 5 pieces of Folder in Store 1
     await StockEngine.recordMovement({
@@ -246,20 +209,22 @@ async function runCriticalSpecTests() {
     });
 
     assert(
-      store1FolderStock.goodStock === 35 && store1BatteryStock.goodStock === 30 && godownFolderStock.goodStock === 300,
-      'TEST 4: Store 1 Folder stock decreased by 5 (40 -> 35), Batteries & Godown remain unchanged'
+      store1FolderStock.goodStock === 295 && store1BatteryStock.goodStock === 200 && godownFolderStock.goodStock === 295,
+      'TEST 4: Store 1 Folder stock decreased by 5 (300 -> 295) and updates Godown & Store 1 identically (Common Inventory)'
     );
 
     // ----------------------------------------------------
-    // TEST 5: Stock Transfer Godown -> Store 1
+    // TEST 5: Stock Addition via Purchase / Intake
     // ----------------------------------------------------
-    await StockEngine.transferStock({
+    await StockEngine.recordMovement({
       businessId: business.id,
       productId: folderProduct.id,
-      fromLocationId: godown.id,
-      toLocationId: store1.id,
+      locationId: godown.id,
+      type: 'PURCHASE',
       quantity: 50,
-      note: 'Transfer 50 pcs Samsung A15 Folder',
+      stockState: 'GOOD',
+      reference: 'PUR-TEST-1',
+      note: 'Purchase 50 pcs Samsung A15 Folder',
     });
 
     const postGodownStock = await prisma.locationStock.findUnique({
@@ -270,8 +235,8 @@ async function runCriticalSpecTests() {
     });
 
     assert(
-      postGodownStock.goodStock === 250 && postStore1Stock.goodStock === 85,
-      'TEST 5: Godown -> Store 1 transfer: Godown -50 (300 -> 250), Store 1 +50 (35 -> 85)'
+      postGodownStock.goodStock === 345 && postStore1Stock.goodStock === 345,
+      'TEST 5: Stock Addition: Godown +50 (295 -> 345) and Store 1 +50 (295 -> 345) reflect shared inventory'
     );
 
     // ----------------------------------------------------
@@ -314,14 +279,14 @@ async function runCriticalSpecTests() {
     // ----------------------------------------------------
     // TEST 7: Negative Stock Allowed
     // ----------------------------------------------------
-    // Deduct 100 pcs when only 85 available -> goes to -15
+    // Deduct 360 pcs when only 345 available -> goes to -15
     await StockEngine.recordMovement({
       businessId: business.id,
       productId: folderProduct.id,
       locationId: store1.id,
       categoryId: 'folders',
       type: 'SALE',
-      quantity: -100,
+      quantity: -360,
       stockState: 'GOOD',
       reference: 'BILL-NEG-1',
     });

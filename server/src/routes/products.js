@@ -53,39 +53,27 @@ router.get('/', async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    // If locationId filter is provided (e.g. Store 1 or Godown), calculate location-specific stock properties for each product
-    if (locationId && locationId !== 'ALL') {
-      products = products.map(p => {
-        const locStockRecord = p.locationStocks?.find(ls => ls.locationId === locationId);
-        const locQuantity = locStockRecord ? locStockRecord.quantity : 0;
-        const locGood = locStockRecord ? locStockRecord.goodStock : 0;
-        const locDefective = locStockRecord ? locStockRecord.defectiveStock : 0;
+    // Common inventory across Godown, Store 1, Store 2, and ALL
+    products = products.map(p => {
+      const locQuantity = p.currentStock || 0;
+      const locGood = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : locQuantity;
+      const locDefective = p.defectiveStock || 0;
 
-        return {
-          ...p,
-          locationStockQuantity: locQuantity,
-          locationGoodStock: locGood,
-          locationDefectiveStock: locDefective,
-        };
-      });
+      return {
+        ...p,
+        locationStockQuantity: locQuantity,
+        locationGoodStock: locGood,
+        locationDefectiveStock: locDefective,
+      };
+    });
 
+    if (stockStatus) {
       if (stockStatus === 'LOW') {
-        products = products.filter(p => p.locationStockQuantity > 0 && p.locationStockQuantity <= p.minStock);
+        products = products.filter(p => p.currentStock > 0 && p.currentStock <= (p.minStock || 5));
       } else if (stockStatus === 'OUT') {
-        products = products.filter(p => p.locationStockQuantity <= 0);
+        products = products.filter(p => p.currentStock <= 0);
       } else if (stockStatus === 'GOOD') {
-        products = products.filter(p => p.locationStockQuantity > p.minStock);
-      }
-    } else {
-      // Overall Business Stock Status filter
-      if (stockStatus) {
-        if (stockStatus === 'LOW') {
-          products = products.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock);
-        } else if (stockStatus === 'OUT') {
-          products = products.filter(p => p.currentStock <= 0);
-        } else if (stockStatus === 'GOOD') {
-          products = products.filter(p => p.currentStock > p.minStock);
-        }
+        products = products.filter(p => p.currentStock > (p.minStock || 5));
       }
     }
 

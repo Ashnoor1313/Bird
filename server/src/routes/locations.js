@@ -59,6 +59,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       },
     });
 
+    // Populate common stock for all products in this new location
+    await StockEngine.syncBusinessStocks(businessId);
+
     res.status(201).json(location);
   } catch (err) {
     console.error('Failed to create location:', err);

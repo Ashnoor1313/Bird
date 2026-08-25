@@ -407,7 +407,9 @@ export const SalesPage = () => {
         queryClient.invalidateQueries({ queryKey: ['sales'] });
         queryClient.invalidateQueries({ queryKey: ['category-hub'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        queryClient.invalidateQueries({ queryKey: ['products'] });
         queryClient.invalidateQueries({ queryKey: ['customers'] });
+        queryClient.invalidateQueries({ queryKey: ['reports'] });
 
         // Immediately open the clean basic invoice for print / WhatsApp share
         setSelectedInvoiceForModal(sale);
@@ -733,12 +735,7 @@ export const SalesPage = () => {
                           );
                         })
                         .map((p) => {
-                          const locStock = p.locationStocks?.find(ls => ls.locationId === billingLocationId)?.quantity;
-                          const branchStock = locStock !== undefined ? locStock : (p.currentStock ?? 0);
-                          const totalStock = p.locationStocks && p.locationStocks.length > 0
-                            ? p.locationStocks.reduce((sum, ls) => sum + (ls.quantity || 0), 0)
-                            : (p.currentStock ?? 0);
-                          const activeLocName = locations.find(l => l.id === billingLocationId)?.name || 'Store';
+                          const stockQty = p.currentStock ?? p.locationStockQuantity ?? 0;
 
                           return (
                             <div
@@ -766,12 +763,9 @@ export const SalesPage = () => {
                                     </span>
                                   </div>
                                   <div className="text-[10px] font-bold mt-0.5">
-                                    <span className={branchStock <= 0 ? 'text-rose-600' : branchStock <= 5 ? 'text-amber-600' : 'text-emerald-700'}>
-                                      {branchStock} in {activeLocName}
+                                    <span className={stockQty <= 0 ? 'text-rose-600' : stockQty <= 5 ? 'text-amber-600' : 'text-emerald-700'}>
+                                      {stockQty} in Stock
                                     </span>
-                                    {totalStock !== branchStock && (
-                                      <span className="text-zinc-400 ml-1">({totalStock} Total)</span>
-                                    )}
                                   </div>
                                 </div>
 

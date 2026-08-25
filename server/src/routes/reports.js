@@ -161,21 +161,8 @@ router.get('/dashboard', async (req, res) => {
     let outOfStockCount = 0;
     let lowStockProducts = [];
 
-    const isGodownLoc = !isLocationSpecific || activeLoc?.type === 'GODOWN' || /godown|warehouse|central/i.test(activeLoc?.name || '');
-
     products.forEach(p => {
-      let qty = p.currentStock || 0;
-      if (isLocationSpecific) {
-        const locStock = p.locationStocks?.find(ls => ls.locationId === locationId);
-        if (locStock) {
-          qty = (locStock.goodStock !== undefined ? locStock.goodStock : locStock.quantity) || 0;
-        } else if (isGodownLoc) {
-          qty = p.currentStock || 0;
-        } else {
-          qty = 0;
-        }
-      }
-
+      const qty = p.currentStock || 0;
       const costPrice = p.purchasePrice || 0;
       const val = qty * costPrice;
 
@@ -390,28 +377,10 @@ router.get('/category-hub', async (req, res) => {
     let outOfStockCount = 0;
 
     const productList = allProducts.map(p => {
-      let qty = p.currentStock || 0;
-      let goodQty = p.goodStock || p.currentStock || 0;
-      let defectiveQty = p.defectiveStock || 0;
-      let testingQty = p.testingStock || 0;
-
-      if (isLocationSpecific) {
-        const ls = p.locationStocks?.find(s => s.locationId === locationId);
-        if (ls) {
-          qty = ls.goodStock !== undefined ? ls.goodStock : ls.quantity;
-          goodQty = ls.goodStock !== undefined ? ls.goodStock : qty;
-          defectiveQty = ls.defectiveStock || 0;
-          testingQty = ls.testingStock || 0;
-        } else if (isGodownLoc) {
-          qty = p.currentStock || 0;
-          goodQty = p.goodStock || p.currentStock || 0;
-        } else {
-          qty = 0;
-          goodQty = 0;
-          defectiveQty = 0;
-          testingQty = 0;
-        }
-      }
+      const qty = p.currentStock || 0;
+      const goodQty = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : qty;
+      const defectiveQty = p.defectiveStock || 0;
+      const testingQty = p.testingStock || 0;
 
       totalStockPcs += qty;
       totalStockValue += qty * (p.purchasePrice || 0);
@@ -429,13 +398,12 @@ router.get('/category-hub', async (req, res) => {
       };
     });
 
-    // 5. Calculate Location Breakdown (Godown, Store 1, Store 2, etc.)
+    // 5. Calculate Location Breakdown (Godown, Store 1, Store 2 all reflect common shared inventory)
     const locationBreakdown = locations.map(loc => {
       let locPcs = 0;
       let locVal = 0;
       allProducts.forEach(p => {
-        const ls = p.locationStocks.find(s => s.locationId === loc.id);
-        const q = ls ? ls.quantity : 0;
+        const q = p.currentStock || 0;
         locPcs += q;
         locVal += q * (p.purchasePrice || 0);
       });
@@ -1046,13 +1014,7 @@ router.get('/analytics', async (req, res) => {
     let batteriesStockValue = 0;
 
     products.forEach(p => {
-      let qty = 0;
-      if (isLocationSpecific) {
-        const ls = p.locationStocks?.find(s => s.locationId === locationId);
-        qty = ls ? (ls.goodStock !== undefined ? ls.goodStock : ls.quantity) : 0;
-      } else {
-        qty = p.goodStock !== undefined ? p.goodStock : p.currentStock;
-      }
+      const qty = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : (p.currentStock || 0);
 
       const val = (qty || 0) * (p.purchasePrice || 0);
       const isBat = /batter|cell|mah/i.test(p.category?.name || '') ||
