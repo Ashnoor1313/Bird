@@ -205,6 +205,121 @@ async function initBaselineData() {
       }
     }
 
+    // Ensure Master Catalog Products exist if catalog is empty
+    const productCount = await prisma.product.count({ where: { businessId: business.id } });
+    if (productCount === 0) {
+      const foldersCat = await prisma.category.findFirst({ where: { businessId: business.id, name: 'Folders' } });
+      const batteriesCat = await prisma.category.findFirst({ where: { businessId: business.id, name: 'Batteries' } });
+
+      const initialProducts = [
+        {
+          name: 'Samsung A15 Display',
+          brand: 'Samsung',
+          model: 'Galaxy A15 5G',
+          partType: 'Display',
+          variant: 'With Frame / Black',
+          quality: 'OEM',
+          unit: 'PCS',
+          itemCode: 'DISP-SAM-A15',
+          sku: 'SAM-A15-DISP',
+          aliases: 'A15 LCD, Samsung A15 LCD, A15 Screen, A15 Display, A15 INCELL, Samsung A15 Folder',
+          purchasePrice: 1850.0,
+          sellingPrice: 2400.0,
+          currentStock: 120,
+          goodStock: 120,
+          minStock: 15,
+          warranty: '7 Days Testing Warranty',
+          categoryId: foldersCat?.id,
+        },
+        {
+          name: 'Vivo Y20 Folder',
+          brand: 'Vivo',
+          model: 'Y20 / Y20i / Y20s',
+          partType: 'Display',
+          variant: 'Black Frame',
+          quality: 'OEM',
+          unit: 'PCS',
+          itemCode: 'DISP-VIV-Y20',
+          aliases: 'Vivo Y20 LCD, Y20 Folder, Vivo Y20 Display',
+          purchasePrice: 980.0,
+          sellingPrice: 1350.0,
+          currentStock: 40,
+          goodStock: 40,
+          minStock: 10,
+          warranty: '7 Days Testing',
+          categoryId: foldersCat?.id,
+        },
+        {
+          name: 'Redmi Note 10 Folder',
+          brand: 'Xiaomi / Redmi',
+          model: 'Note 10 4G',
+          partType: 'Folder',
+          variant: 'Black Frame',
+          quality: 'OEM',
+          unit: 'PCS',
+          itemCode: 'FOLD-RED-N10',
+          sku: 'RED-N10-FOLD',
+          aliases: 'Redmi Note 10 LCD, Note 10 Folder, Redmi Note 10 Screen, Note 10 Display',
+          purchasePrice: 1200.0,
+          sellingPrice: 1650.0,
+          currentStock: 80,
+          goodStock: 80,
+          minStock: 10,
+          warranty: '7 Days Testing Warranty',
+          categoryId: foldersCat?.id,
+        },
+        {
+          name: 'Samsung A15 Battery',
+          brand: 'Samsung',
+          model: 'Galaxy A15',
+          partType: 'Battery',
+          variant: '5000 mAh',
+          quality: 'Original',
+          unit: 'PCS',
+          itemCode: 'BAT-SAM-A15',
+          sku: 'SAM-A15-BAT',
+          aliases: 'A15 Battery, Samsung A15 Batt, A15 Cell, Samsung A15 5000mAh',
+          purchasePrice: 450.0,
+          sellingPrice: 750.0,
+          currentStock: 85,
+          goodStock: 85,
+          minStock: 15,
+          warranty: '6 Months Warranty',
+          categoryId: batteriesCat?.id,
+        },
+        {
+          name: 'BLP793 Battery (Oppo A15 / A15s)',
+          brand: 'Oppo',
+          model: 'A15 / A15s / A16',
+          partType: 'Battery',
+          variant: '4230 mAh BLP793',
+          quality: 'Original',
+          unit: 'PCS',
+          itemCode: 'BAT-BLP793',
+          aliases: 'BLP793, BLP 793, Oppo A15 Battery, BLP793 Battery',
+          purchasePrice: 380.0,
+          sellingPrice: 650.0,
+          currentStock: 50,
+          goodStock: 50,
+          minStock: 10,
+          warranty: '6 Months Warranty',
+          categoryId: batteriesCat?.id,
+        },
+      ];
+
+      for (const prod of initialProducts) {
+        if (prod.categoryId) {
+          await prisma.product.create({
+            data: {
+              businessId: business.id,
+              ...prod,
+            },
+          });
+        }
+      }
+      console.log('✅ Baseline master catalog products created.');
+    }
+
     // Ensure common stock synchronization across Godown, Store 1, Store 2
     const { StockEngine } = await import('./services/StockEngine.js');
     await StockEngine.syncBusinessStocks(business.id);
