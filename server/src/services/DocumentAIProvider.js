@@ -1,10 +1,31 @@
 import fs from 'fs';
 import path from 'path';
-import tesseract from 'tesseract.js';
+import tesseractPkg from 'tesseract.js';
 import pdfParse from 'pdf-parse';
 import { GoogleGenAI } from '@google/genai';
 import { ImageProcessor } from './ImageProcessor.js';
 import { ProductNormalizer } from './ProductNormalizer.js';
+
+/**
+ * Tesseract ESM compatibility helper
+ */
+export const recognizeOCR = async (imagePath, lang = 'eng', options = {}) => {
+  const t = tesseractPkg.default || tesseractPkg;
+  const fn = t.recognize || (typeof t === 'function' ? t : null);
+  if (typeof fn === 'function') {
+    return await fn(imagePath, lang, options);
+  }
+  throw new Error('Tesseract OCR recognize engine function unavailable');
+};
+
+/**
+ * Validate Google Gemini API Key format
+ */
+export function isValidGeminiApiKey(key) {
+  if (!key || typeof key !== 'string') return false;
+  const trimmed = key.trim();
+  return trimmed.length > 20 && trimmed.startsWith('AIzaSy');
+}
 
 /**
  * Base Abstract Provider Interface
@@ -22,7 +43,7 @@ export class GoogleGeminiDocumentAIProvider extends DocumentAIProvider {
   constructor(apiKey) {
     super();
     this.apiKey = apiKey;
-    if (apiKey) {
+    if (apiKey && isValidGeminiApiKey(apiKey)) {
       this.ai = new GoogleGenAI({ apiKey });
     }
   }
@@ -97,7 +118,6 @@ Rules for mobile spare-parts accuracy:
 4. If a customer or party name/phone is visible, populate customer.name and customer.phone.
 5. Return ONLY the JSON object. Do not include markdown preamble.`;
 
-      // Models to try in order of capability
       const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
       let response = null;
       let lastErr = null;
@@ -476,7 +496,7 @@ export class TesseractEngineProvider extends DocumentAIProvider {
         try {
           // Pass 1: PSM 6 (Uniform text block / table)
           const res6 = await Promise.race([
-            tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
+            recognizeOCR(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Tesseract Timeout')), 12000))
           ]);
           rawText = res6?.data?.text || '';
@@ -484,7 +504,7 @@ export class TesseractEngineProvider extends DocumentAIProvider {
           // Pass 2: PSM 3 (Auto Page Layout) if text is sparse
           if ((!rawText || rawText.trim().length < 40) && processedPath) {
             const res3 = await Promise.race([
-              tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '3' }),
+              recognizeOCR(processedPath, 'eng', { tessedit_pageseg_mode: '3' }),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Tesseract Timeout')), 12000))
             ]);
             if (res3?.data?.text) {
@@ -517,8 +537,8 @@ export class DocumentAIOrchestrator {
   static async processDocument(filePath, mimeType = 'image/jpeg', options = {}) {
     const apiKey = options.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
 
-    // Try Primary specialized Gemini Document AI adapter first (1-2 seconds)
-    if (apiKey) {
+    // Try Primary specialized Gemini Document AI adapter first if valid API key exists
+    if (apiKey && isValidGeminiApiKey(apiKey)) {
       try {
         const geminiAdapter = new GoogleGeminiDocumentAIProvider(apiKey);
         const geminiResult = await geminiAdapter.processDocument(filePath, mimeType);

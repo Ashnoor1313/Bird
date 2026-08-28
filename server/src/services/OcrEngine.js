@@ -1,4 +1,4 @@
-import tesseract from 'tesseract.js';
+import tesseractPkg from 'tesseract.js';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
@@ -6,7 +6,7 @@ import pdfParse from 'pdf-parse';
 import { GoogleGenAI } from '@google/genai';
 import { ProductNormalizer } from './ProductNormalizer.js';
 import { ImageProcessor } from './ImageProcessor.js';
-import { parseExtractedText } from './DocumentAIProvider.js';
+import { parseExtractedText, recognizeOCR, isValidGeminiApiKey } from './DocumentAIProvider.js';
 
 export class OcrEngine {
   /**
@@ -17,9 +17,9 @@ export class OcrEngine {
     try {
       console.log(`📷 Processing document OCR scan: ${filePath}`);
 
-      // 1. TRY GEMINI MULTIMODAL VISION LLM IF API KEY IS AVAILABLE
+      // 1. TRY GEMINI MULTIMODAL VISION LLM IF VALID API KEY IS AVAILABLE
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
-      if (apiKey && filePath && fs.existsSync(filePath)) {
+      if (apiKey && isValidGeminiApiKey(apiKey) && filePath && fs.existsSync(filePath)) {
         try {
           console.log('🤖 Invoking Gemini Multimodal Vision AI for handwritten document extraction...');
           const aiResult = await this.scanWithGeminiVision(filePath, apiKey);
@@ -47,45 +47,32 @@ export class OcrEngine {
       }
 
       if ((!rawText || rawText.trim().length === 0) && filePath && fs.existsSync(filePath)) {
-        const processedPath = `${filePath}_proc.png`;
-        try {
-          const prep = await ImageProcessor.preprocessForVisionAI(filePath);
-          if (prep && prep.buffer) {
-            fs.writeFileSync(processedPath, prep.buffer);
-          } else {
-            await sharp(filePath)
-              .resize({ width: 2400, fit: 'inside', withoutEnlargement: false })
-              .grayscale()
-              .toFile(processedPath);
-          }
+        const processedPath = await ImageProcessor.preprocessForTesseract(filePath);
 
+        try {
           // Pass 1: PSM 6 (Uniform Block)
           const resultPsm6 = await Promise.race([
-            tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
+            recognizeOCR(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('OCR Timeout')), 15000))
           ]);
           rawText = resultPsm6?.data?.text || '';
 
-          // Pass 2: PSM 11 (Sparse Text / Handwriting) if rawText is sparse
-          if ((!rawText || rawText.length < 50) && fs.existsSync(processedPath)) {
-            const resultPsm11 = await Promise.race([
-              tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '11' }),
+          // Pass 2: PSM 3 (Auto Layout) if rawText is sparse
+          if ((!rawText || rawText.length < 40) && processedPath) {
+            const resultPsm3 = await Promise.race([
+              recognizeOCR(processedPath, 'eng', { tessedit_pageseg_mode: '3' }),
               new Promise((_, reject) => setTimeout(() => reject(new Error('OCR Timeout')), 15000))
             ]);
-            if (resultPsm11?.data?.text) {
-              rawText += '\n' + resultPsm11.data.text;
+            if (resultPsm3?.data?.text) {
+              rawText += '\n' + resultPsm3.data.text;
             }
           }
 
-          if (fs.existsSync(processedPath)) fs.unlinkSync(processedPath);
+          if (processedPath !== filePath && fs.existsSync(processedPath)) {
+            try { fs.unlinkSync(processedPath); } catch (e) {}
+          }
         } catch (procErr) {
           console.warn('Sharp preprocessing / Tesseract warning:', procErr.message);
-          try {
-            const rawResult = await tesseract.recognize(filePath, 'eng');
-            rawText = rawResult?.data?.text || '';
-          } catch (e) {
-            console.error('Raw Tesseract fallback failed:', e.message);
-          }
         }
       }
 
@@ -111,6 +98,8 @@ export class OcrEngine {
    * Gemini Multimodal Vision OCR extraction
    */
   static async scanWithGeminiVision(filePath, apiKey) {
+    if (!isValidGeminiApiKey(apiKey)) return null;
+
     const ai = new GoogleGenAI({ apiKey });
     const isPdf = filePath.toLowerCase().endsWith('.pdf');
 
