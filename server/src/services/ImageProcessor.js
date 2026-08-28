@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 export class ImageProcessor {
   /**
@@ -105,11 +106,13 @@ export class ImageProcessor {
     if (!filePath || !fs.existsSync(filePath)) return filePath;
     if (filePath.toLowerCase().endsWith('.pdf')) return filePath;
 
-    const processedPath = `${filePath}_tess.png`;
+    const fileName = `tess_${Date.now()}_${path.basename(filePath)}.png`;
+    const processedPath = path.join(os.tmpdir(), fileName);
+
     try {
       await sharp(filePath)
         .rotate()
-        .resize({ width: 2200, fit: 'inside', withoutEnlargement: false })
+        .resize({ width: 1400, fit: 'inside', withoutEnlargement: true })
         .grayscale()
         .linear(1.5, -0.2) // Binarize contrast (black ink on white paper)
         .sharpen({ sigma: 1.5 })

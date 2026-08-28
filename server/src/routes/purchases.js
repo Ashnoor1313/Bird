@@ -12,12 +12,28 @@ import { SupplierMatcher } from '../services/SupplierMatcher.js';
 import { InvoiceValidator } from '../services/InvoiceValidator.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
 
+import os from 'os';
+import fs from 'fs';
+
 const router = express.Router();
+
+const getUploadDir = () => {
+  const uploadDir = path.resolve('uploads');
+  if (!fs.existsSync(uploadDir)) {
+    try {
+      fs.mkdirSync(uploadDir, { recursive: true });
+      return uploadDir;
+    } catch (e) {
+      return os.tmpdir();
+    }
+  }
+  return uploadDir;
+};
 
 // Multer storage configuration for uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, getUploadDir());
   },
   filename: (req, file, cb) => {
     cb(null, `bill_${Date.now()}${path.extname(file.originalname)}`);

@@ -9,11 +9,27 @@ import { DocumentAIOrchestrator } from '../services/DocumentAIProvider.js';
 import { ProductMatcher } from '../services/ProductMatcher.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
 
+import os from 'os';
+import fs from 'fs';
+
 const router = express.Router();
+
+const getUploadDir = () => {
+  const uploadDir = path.resolve('uploads');
+  if (!fs.existsSync(uploadDir)) {
+    try {
+      fs.mkdirSync(uploadDir, { recursive: true });
+      return uploadDir;
+    } catch (e) {
+      return os.tmpdir();
+    }
+  }
+  return uploadDir;
+};
 
 // Multer storage for sale bill scans
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => cb(null, getUploadDir()),
   filename: (req, file, cb) => cb(null, `sale_bill_${Date.now()}${path.extname(file.originalname)}`),
 });
 const upload = multer({ storage });

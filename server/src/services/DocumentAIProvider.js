@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import tesseractPkg from 'tesseract.js';
 import pdfParse from 'pdf-parse';
 import { GoogleGenAI } from '@google/genai';
@@ -7,13 +8,18 @@ import { ImageProcessor } from './ImageProcessor.js';
 import { ProductNormalizer } from './ProductNormalizer.js';
 
 /**
- * Tesseract ESM compatibility helper
+ * Tesseract ESM compatibility helper with Production Cloud /tmp caching & worker resiliency
  */
 export const recognizeOCR = async (imagePath, lang = 'eng', options = {}) => {
   const t = tesseractPkg.default || tesseractPkg;
   const fn = t.recognize || (typeof t === 'function' ? t : null);
   if (typeof fn === 'function') {
-    return await fn(imagePath, lang, options);
+    const prodOptions = {
+      cachePath: os.tmpdir(),
+      gzip: true,
+      ...options,
+    };
+    return await fn(imagePath, lang, prodOptions);
   }
   throw new Error('Tesseract OCR recognize engine function unavailable');
 };
