@@ -619,4 +619,83 @@ router.get('/:id/pdf', async (req, res) => {
   }
 });
 
+// SCAN BILL / DOCUMENT AI OCR ENDPOINT FOR SALES BILLS
+router.post('/scan', upload.single('billFile'), async (req, res) => {
+  let tempFilePath = null;
+  try {
+    const { businessId, categoryId, geminiApiKey } = req.body;
+    let targetBusinessId = businessId;
+    if (!targetBusinessId || targetBusinessId === 'undefined' || targetBusinessId === 'null') {
+      const firstBiz = await prisma.business.findFirst();
+      targetBusinessId = firstBiz?.id;
+    }
+
+    if (!targetBusinessId) {
+      return res.status(400).json({ error: 'Active business required' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'Bill file/image is required' });
+    }
+
+    tempFilePath = req.file.path;
+
+    // Run Document AI Orchestrator
+    const docResult = await DocumentAIOrchestrator.processDocument(tempFilePath, req.file.mimetype, { geminiApiKey });
+
+    if (!docResult || !docResult.items) {
+      return res.status(422).json({
+        error: 'Unable to extract structured line items from this document',
+        rawText: docResult?.rawText || '',
+      });
+    }
+
+    // Match extracted items against existing Catalog Products
+    const catalogProducts = await prisma.product.findMany({
+      where: {
+        businessId: targetBusinessId,
+        ...(categoryId && categoryId !== 'ALL' && categoryId !== 'undefined' ? { categoryId } : {}),
+      },
+    });
+
+    const reconciledItems = docResult.items.map((rawItem) => {
+      const normalizedDescription = ProductNormalizer.stripNoiseWords(rawItem.description || rawItem.name || '');
+      const matchResult = ProductMatcher.findBestMatch(normalizedDescription, catalogProducts);
+
+      const resolvedSellPrice = matchResult.matchedProduct?.sellingPrice || (rawItem.unitPrice > 0 ? Math.round(rawItem.unitPrice * 1.25) : rawItem.unitPrice || 0);
+
+      return {
+        productName: normalizedDescription || rawItem.description,
+        quantity: rawItem.quantity || 1,
+        unitPrice: rawItem.unitPrice > 0 ? rawItem.unitPrice : resolvedSellPrice,
+        purchasePrice: matchResult.matchedProduct?.purchasePrice || 0,
+        total: (rawItem.quantity || 1) * (rawItem.unitPrice > 0 ? rawItem.unitPrice : resolvedSellPrice),
+        matchedProductId: matchResult.matchedProduct?.id || null,
+        matchedProduct: matchResult.matchedProduct || null,
+        confidence: matchResult.confidence,
+      };
+    });
+
+    return res.json({
+      success: true,
+      documentType: docResult.documentType || 'SALES_INVOICE',
+      customerName: docResult.customerName || docResult.customer?.name || null,
+      customerPhone: docResult.customerPhone || docResult.customer?.phone || null,
+      invoiceNumber: docResult.invoiceNumber || null,
+      invoiceDate: docResult.invoiceDate || new Date().toISOString().split('T')[0],
+      items: reconciledItems,
+      grandTotal: docResult.grandTotal || 0,
+      confidence: docResult.confidence || { overall: 85 },
+      rawText: docResult.rawText || '',
+    });
+  } catch (err) {
+    console.error('Sales bill scan error:', err);
+    return res.status(500).json({ error: 'Failed to process sales bill image', details: err.message });
+  } finally {
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      try { fs.unlinkSync(tempFilePath); } catch (e) {}
+    }
+  }
+});
+
 export default router;

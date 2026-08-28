@@ -79,9 +79,16 @@ router.get('/', async (req, res) => {
 
 // SCAN BILL OCR ENDPOINT (10-Stage AI Document Extraction & Reconciliation Pipeline)
 router.post('/scan', upload.single('billFile'), async (req, res) => {
+  let imagePath = null;
   try {
     const { businessId, locationId, receivingLocationId, geminiApiKey } = req.body;
-    if (!businessId) {
+    let targetBusinessId = businessId;
+    if (!targetBusinessId || targetBusinessId === 'undefined' || targetBusinessId === 'null') {
+      const firstBiz = await prisma.business.findFirst();
+      targetBusinessId = firstBiz?.id;
+    }
+
+    if (!targetBusinessId) {
       return res.status(400).json({ error: 'businessId required' });
     }
 
@@ -89,7 +96,7 @@ router.post('/scan', upload.single('billFile'), async (req, res) => {
       return res.status(400).json({ error: 'Bill file/image is required' });
     }
 
-    const imagePath = req.file.path;
+    imagePath = req.file.path;
     const targetLoc = locationId || receivingLocationId || null;
 
     // STAGE 1: Image Quality Assessment
@@ -101,7 +108,7 @@ router.post('/scan', upload.single('billFile'), async (req, res) => {
     // STAGE 4: Store-Isolated Supplier Matching
     const supplierMatch = await SupplierMatcher.matchSupplier(
       docResult.supplier,
-      businessId,
+      targetBusinessId,
       targetLoc
     );
 
@@ -121,7 +128,7 @@ router.post('/scan', upload.single('billFile'), async (req, res) => {
       };
     });
 
-    const matchedItems = await ProductMatcher.matchAllItems(rawItems, businessId);
+    const matchedItems = await ProductMatcher.matchAllItems(rawItems, targetBusinessId);
 
     // STAGE 6 & 7: Mathematical & GST Validation Engine
     const validationResults = InvoiceValidator.validateInvoice({
@@ -174,6 +181,10 @@ router.post('/scan', upload.single('billFile'), async (req, res) => {
   } catch (err) {
     console.error('AI Document Extraction failure:', err);
     res.status(500).json({ error: 'Failed to process bill image via AI Document Extraction engine' });
+  } finally {
+    if (imagePath && fs.existsSync(imagePath)) {
+      try { fs.unlinkSync(imagePath); } catch (e) {}
+    }
   }
 });
 
