@@ -958,7 +958,7 @@ export const SalesPage = () => {
                               {/* Quantity Stepper */}
                               <div className="flex items-center gap-1.5">
                                 <span className="text-[10px] font-extrabold text-zinc-500 uppercase">Qty:</span>
-                                <div className="inline-flex items-center border border-zinc-200 rounded-lg bg-zinc-50 overflow-hidden shadow-2xs">
+                                <div className="inline-flex items-center border border-zinc-200 rounded-lg bg-zinc-50 overflow-hidden shadow-2xs min-w-[100px] justify-between">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -984,7 +984,7 @@ export const SalesPage = () => {
                                       updated[idx].quantity = Math.max(1, val);
                                       setBillItems(updated);
                                     }}
-                                    className="w-10 text-center text-xs font-black text-zinc-900 bg-white focus:outline-none py-1"
+                                    className="w-14 min-w-[48px] text-center text-xs font-black text-zinc-900 bg-white focus:outline-none py-1 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                   />
                                   <button
                                     type="button"
@@ -1015,7 +1015,7 @@ export const SalesPage = () => {
                                       updated[idx].unitPrice = val;
                                       setBillItems(updated);
                                     }}
-                                    className="w-16 text-right font-extrabold text-xs text-zinc-900 bg-transparent focus:outline-none"
+                                    className="w-16 text-right font-extrabold text-xs text-zinc-900 bg-transparent focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                     placeholder="0"
                                   />
                                 </div>
@@ -1033,7 +1033,7 @@ export const SalesPage = () => {
                       <tr className="bg-zinc-100 border-b border-zinc-200 text-zinc-700 font-bold uppercase text-[10px]">
                         <th className="p-2.5">Item / Model (Editable)</th>
                         <th className="p-2.5 text-center w-24">Cost</th>
-                        <th className="p-2.5 text-center w-28">Quantity</th>
+                        <th className="p-2.5 text-center w-36">Quantity</th>
                         <th className="p-2.5 text-right w-28">Selling Rate</th>
                         <th className="p-2.5 text-right w-28">Total</th>
                         <th className="p-2.5 text-center w-10"></th>
@@ -1075,12 +1075,12 @@ export const SalesPage = () => {
                                     updated[idx].purchasePrice = val;
                                     setBillItems(updated);
                                   }}
-                                  className="w-16 text-center bg-white border border-zinc-200 rounded-lg px-1.5 py-1 text-xs font-semibold text-zinc-600 focus:outline-none focus:border-zinc-900 shadow-2xs"
+                                  className="w-16 text-center bg-white border border-zinc-200 rounded-lg px-1.5 py-1 text-xs font-semibold text-zinc-600 focus:outline-none focus:border-zinc-900 shadow-2xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                               </div>
                             </td>
                             <td className="p-2.5 text-center">
-                              <div className="inline-flex items-center border border-zinc-200 rounded-lg bg-white overflow-hidden shadow-2xs">
+                              <div className="inline-flex items-center border border-zinc-200 rounded-lg bg-white overflow-hidden shadow-2xs min-w-[104px] justify-between">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -1092,7 +1092,7 @@ export const SalesPage = () => {
                                       removeBillItem(idx);
                                     }
                                   }}
-                                  className="px-2 py-1 hover:bg-zinc-100 text-zinc-600 font-bold"
+                                  className="px-2.5 py-1 hover:bg-zinc-100 text-zinc-600 font-bold"
                                 >
                                   -
                                 </button>
@@ -1106,7 +1106,7 @@ export const SalesPage = () => {
                                     updated[idx].quantity = Math.max(1, val);
                                     setBillItems(updated);
                                   }}
-                                  className="w-12 text-center text-xs font-black text-zinc-900 focus:outline-none py-1"
+                                  className="w-16 min-w-[56px] text-center text-xs font-black text-zinc-900 focus:outline-none py-1 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                                 <button
                                   type="button"
@@ -1115,7 +1115,7 @@ export const SalesPage = () => {
                                     updated[idx].quantity += 1;
                                     setBillItems(updated);
                                   }}
-                                  className="px-2 py-1 hover:bg-zinc-100 text-zinc-600 font-bold"
+                                  className="px-2.5 py-1 hover:bg-zinc-100 text-zinc-600 font-bold"
                                 >
                                   +
                                 </button>

@@ -620,7 +620,7 @@ export const CategoryScanStockModal = ({
                     <thead className="bg-slate-100/75 border-b border-slate-200 text-slate-600 font-semibold">
                       <tr>
                         <th className="py-2.5 px-3">Item / Model Name</th>
-                        <th className="py-2.5 px-2 text-center w-20">Qty (Pcs)</th>
+                        <th className="py-2.5 px-2 text-center w-24">Qty (Pcs)</th>
                         <th className="py-2.5 px-2 text-right w-24">Buy Rate (₹)</th>
                         <th className="py-2.5 px-2 text-right w-28 bg-emerald-50/50 text-emerald-900 font-bold">Selling Rate (₹)</th>
                         <th className="py-2.5 px-3 w-40">Catalog Action</th>
@@ -644,7 +644,7 @@ export const CategoryScanStockModal = ({
                               min="1"
                               value={item.quantity}
                               onChange={(e) => handleUpdateItem(idx, 'quantity', e.target.value)}
-                              className="w-14 text-center text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1 focus:ring-1 focus:ring-slate-900"
+                              className="w-16 min-w-[56px] text-center text-xs font-bold text-slate-900 bg-white border border-slate-200 rounded-lg py-1 px-1 focus:ring-1 focus:ring-slate-900"
                             />
                           </td>
                           <td className="py-2 px-2 text-right">

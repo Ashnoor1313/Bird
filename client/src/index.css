@@ -30,6 +30,17 @@
     touch-action: manipulation;
   }
 
+  /* Remove default browser spinner buttons from number inputs for full digit visibility */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
   h1, h2, h3, h4, h5, h6 {
     color: #09090b;
     letter-spacing: -0.025em;
