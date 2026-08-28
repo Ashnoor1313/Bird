@@ -1,7 +1,10 @@
 import fs from 'fs';
+import path from 'path';
 import tesseract from 'tesseract.js';
+import pdfParse from 'pdf-parse';
 import { GoogleGenAI } from '@google/genai';
 import { ImageProcessor } from './ImageProcessor.js';
+import { ProductNormalizer } from './ProductNormalizer.js';
 
 /**
  * Base Abstract Provider Interface
@@ -30,16 +33,30 @@ export class GoogleGeminiDocumentAIProvider extends DocumentAIProvider {
     }
 
     try {
-      console.log('🤖 GoogleGeminiDocumentAIProvider: Processing optimized image with Gemini Vision AI...');
+      console.log('🤖 GoogleGeminiDocumentAIProvider: Processing document with Gemini Vision AI...');
       
-      // Step 1: Preprocess image (Auto-rotate EXIF, resize to 1400px, compress to ~150KB)
-      // This increases OCR speed by 4x-5x and fixes upside-down/sideways mobile photos
-      const imageBuffer = await ImageProcessor.preprocessForVisionAI(filePath);
-      const base64Image = (imageBuffer || fs.readFileSync(filePath)).toString('base64');
+      const isPdf = mimeType === 'application/pdf' || filePath.toLowerCase().endsWith('.pdf');
+      
+      let base64Data = '';
+      let targetMimeType = 'image/jpeg';
+
+      if (isPdf) {
+        base64Data = fs.readFileSync(filePath).toString('base64');
+        targetMimeType = 'application/pdf';
+      } else {
+        const prep = await ImageProcessor.preprocessForVisionAI(filePath);
+        if (prep && prep.buffer) {
+          base64Data = prep.buffer.toString('base64');
+          targetMimeType = prep.mimeType || 'image/jpeg';
+        } else {
+          base64Data = fs.readFileSync(filePath).toString('base64');
+          targetMimeType = mimeType || 'image/jpeg';
+        }
+      }
 
       const prompt = `You are a specialized Document AI & Invoice OCR Parser for Indian mobile spare-parts shops, printed tax invoices, thermal billing receipts, and handwritten inventory sheets.
 
-Carefully read this document image. Extract customer details, supplier details, invoice number, invoice date, and ALL item lines.
+Carefully read this document image / PDF. Extract customer details, supplier details, invoice number, invoice date, and ALL item lines.
 
 Return ONLY a valid JSON object matching this exact structure:
 {
@@ -80,21 +97,39 @@ Rules for mobile spare-parts accuracy:
 4. If a customer or party name/phone is visible, populate customer.name and customer.phone.
 5. Return ONLY the JSON object. Do not include markdown preamble.`;
 
-      const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image,
-            },
-          },
-          prompt,
-        ],
-      });
+      // Models to try in order of capability
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      let response = null;
+      let lastErr = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          response = await this.ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                inlineData: {
+                  mimeType: targetMimeType,
+                  data: base64Data,
+                },
+              },
+              prompt,
+            ],
+          });
+          if (response && response.text) break;
+        } catch (mErr) {
+          console.warn(`Gemini model ${modelName} call failed:`, mErr.message);
+          lastErr = mErr;
+        }
+      }
+
+      if (!response || !response.text) {
+        throw lastErr || new Error('No response from Gemini API models');
+      }
 
       const text = response.text || '';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const cleanJsonText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = cleanJsonText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
@@ -152,105 +187,313 @@ Rules for mobile spare-parts accuracy:
 }
 
 /**
- * Tesseract Multi-Pass Engine Adapter (Fallback Engine)
+ * Enhanced Multi-Pattern Text & Table Parser (Used by PDF & Tesseract Fallback Engine)
+ */
+export function parseExtractedText(rawText) {
+  const lines = (rawText || '').split('\n').map(l => l.trim()).filter(Boolean);
+
+  let supplierName = null;
+  let customerName = null;
+  let customerPhone = null;
+  let invoiceNumber = null;
+  let invoiceDate = new Date().toISOString().split('T')[0];
+  const items = [];
+  let hasPrice = false;
+
+  for (const line of lines) {
+    // Skip headers and structural noise
+    if (/particulars|s\.no|rate|amount|qty|quantity|balance|description|signature|e\.&o\.e|taxable|hsn|gst/i.test(line) && line.length < 45) {
+      continue;
+    }
+
+    // 1. Detect Supplier Name
+    if (/supplier|vendor|from|wholesale|traders|mobiles|distributor|enterprises/i.test(line) && !supplierName) {
+      const match = line.match(/(?:supplier|vendor|from|wholesale|traders|mobiles|distributor)\s*[:#-]?\s*([A-Za-z0-9\s.&'-]+)/i);
+      supplierName = match ? match[1].trim() : line.replace(/(supplier|vendor|from):/i, '').trim();
+    }
+
+    // 2. Detect Customer Name / Phone
+    if (/(?:customer|client|to|buyer|party|m\/s|bill to)\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i.test(line) && !customerName) {
+      const match = line.match(/(?:customer|client|to|buyer|party|m\/s|bill to)\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i);
+      if (match && match[1] && match[1].trim().length > 2 && !/invoice|date|number/i.test(match[1])) {
+        customerName = match[1].trim();
+      }
+    }
+
+    const phoneMatch = line.match(/(?:\+91[\s-]*)?([6-9]\d{9})\b/);
+    if (phoneMatch && !customerPhone) {
+      customerPhone = phoneMatch[1];
+    }
+
+    // 3. Detect Invoice Number
+    if (/(?:inv|bill|invoice|receipt|sl\.?\s*no)\s*(?:no\.?|num\.?)?\s*[:#-]?\s*\b([A-Z0-9/-]{3,})\b/i.test(line) && !invoiceNumber) {
+      const m = line.match(/(?:inv|bill|invoice|receipt|sl\.?\s*no)\s*(?:no\.?|num\.?)?\s*[:#-]?\s*\b([A-Z0-9/-]{3,})\b/i);
+      if (m && m[1] && !/invoice|receipt|tax|bill/i.test(m[1])) invoiceNumber = m[1];
+    }
+
+    // 4. Detect Date
+    const dateMatch = line.match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/);
+    if (dateMatch && !invoiceDate) {
+      invoiceDate = dateMatch[1];
+    }
+
+    // --- ITEM LINE EXTRACTION PATTERNS ---
+
+    // PATTERN A: Math Verification Strategy (Qty * Rate = Total)
+    const numbers = [];
+    const numRegex = /\b\d+(?:\.\d+)?\b/g;
+    let numMatch;
+    while ((numMatch = numRegex.exec(line)) !== null) {
+      numbers.push({ val: parseFloat(numMatch[0]), raw: numMatch[0], index: numMatch.index });
+    }
+
+    let parsedItem = null;
+
+    if (numbers.length >= 2) {
+      for (let i = 0; i < numbers.length; i++) {
+        for (let j = 0; j < numbers.length; j++) {
+          if (i === j) continue;
+          for (let k = 0; k < numbers.length; k++) {
+            if (k === i || k === j) continue;
+            const qty = numbers[i].val;
+            const rate = numbers[j].val;
+            const amt = numbers[k].val;
+
+            if (qty > 0 && qty <= 1000 && rate > 0 && Math.abs(qty * rate - amt) <= Math.max(2, amt * 0.05)) {
+              let nameText = line;
+              [numbers[i], numbers[j], numbers[k]].forEach(n => {
+                nameText = nameText.replace(n.raw, '');
+              });
+              nameText = nameText.replace(/^\s*\d+[.\s|-]*/, '').replace(/[^a-zA-Z0-9\s/().+-]/g, ' ').trim();
+              const cleanName = ProductNormalizer.stripNoiseWords(nameText) || nameText || 'Spare Part Item';
+
+              if (cleanName.length >= 2 && !/subtotal|total|amount|signature|date|particulars/i.test(cleanName)) {
+                parsedItem = {
+                  description: cleanName,
+                  productCode: null,
+                  hsn: null,
+                  quantity: Math.round(qty),
+                  unit: 'PCS',
+                  unitPrice: rate,
+                  discount: 0,
+                  taxableAmount: amt,
+                  taxRate: 0,
+                  taxAmount: 0,
+                  total: amt,
+                  confidence: 90,
+                };
+                hasPrice = true;
+                break;
+              }
+            }
+          }
+          if (parsedItem) break;
+        }
+        if (parsedItem) break;
+      }
+    }
+
+    // PATTERN B: Standard Table Line [SrNo] Description Qty UnitPrice Total OR Description Qty UnitPrice
+    if (!parsedItem) {
+      const tableMatch = line.match(/^(?:(\d+)[.\s|-]+)?([A-Za-z0-9\s/().+–-]+?)\s+(\d+)\s+(?:pcs|pc|nos|unit)?\s*@?\s*(\d+(?:\.\d+)?)(?:\s+(\d+(?:\.\d+)?))?$/i);
+      if (tableMatch) {
+        const name = tableMatch[2].trim();
+        const qty = parseInt(tableMatch[3], 10);
+        const price = parseFloat(tableMatch[4]);
+        const total = tableMatch[5] ? parseFloat(tableMatch[5]) : qty * price;
+
+        if (qty > 0 && qty < 1000 && name.length >= 2 && !/total|amount|subtotal|tax|balance|signature|date|particulars/i.test(name)) {
+          const cleanName = ProductNormalizer.stripNoiseWords(name) || name;
+          parsedItem = {
+            description: cleanName,
+            productCode: null,
+            hsn: null,
+            quantity: qty,
+            unit: 'PCS',
+            unitPrice: price,
+            discount: 0,
+            taxableAmount: total,
+            taxRate: 0,
+            taxAmount: 0,
+            total: total,
+            confidence: 85,
+          };
+          if (price > 0) hasPrice = true;
+        }
+      }
+    }
+
+    // PATTERN C: Explicit Qty or Price Keywords (e.g. "Samsung A15 Display Qty: 5 Rate: 450", "Vivo Y20 10 Pcs @ 350")
+    if (!parsedItem) {
+      const keywordMatch = line.match(/^(.+?)\s+(?:qty|quantity|pcs|pc|x)\s*[:#-]?\s*(\d+)(?:\s+(?:rate|price|cost|amt|total|@)\s*[:#-]?\s*(\d+(?:\.\d+)?))?/i);
+      if (keywordMatch) {
+        const name = keywordMatch[1].replace(/^\s*\d+[.\s|-]*/, '').trim();
+        const qty = parseInt(keywordMatch[2], 10);
+        const price = keywordMatch[3] ? parseFloat(keywordMatch[3]) : 0;
+        const total = qty * price;
+
+        if (qty > 0 && qty < 1000 && name.length >= 2 && !/total|amount|subtotal|particulars/i.test(name)) {
+          const cleanName = ProductNormalizer.stripNoiseWords(name) || name;
+          parsedItem = {
+            description: cleanName,
+            productCode: null,
+            hsn: null,
+            quantity: qty,
+            unit: 'PCS',
+            unitPrice: price,
+            discount: 0,
+            taxableAmount: total,
+            taxRate: 0,
+            taxAmount: 0,
+            total: total,
+            confidence: 80,
+          };
+          if (price > 0) hasPrice = true;
+        }
+      }
+    }
+
+    // PATTERN D: Stock Slip Line Format (e.g. "1 2 J2", "2 6 J5", "12 3 A14 4G", "5 Vivo Y20", "Redmi Note 10 - 10 Pcs")
+    if (!parsedItem) {
+      const stockMatch3 = line.match(/^(?:(\d+)[.\s|-]+)?(\d+)\s+([A-Za-z0-9\s/().+-]+)$/);
+      if (stockMatch3) {
+        const qty = parseInt(stockMatch3[2], 10);
+        const name = stockMatch3[3].trim();
+        if (qty > 0 && qty < 1000 && name.length >= 1 && !/total|amount|signature|date|particulars|s\.no|grand/i.test(name)) {
+          const cleanName = ProductNormalizer.stripNoiseWords(name) || name;
+          parsedItem = {
+            description: cleanName,
+            productCode: null,
+            hsn: null,
+            quantity: qty,
+            unit: 'PCS',
+            unitPrice: 0,
+            discount: 0,
+            taxableAmount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            total: 0,
+            confidence: 75,
+          };
+        }
+      }
+    }
+
+    // PATTERN E: Model Name followed by trailing Qty (e.g. "Samsung A15 Folder - 10" or "Battery BLP793 5")
+    if (!parsedItem) {
+      const endQtyMatch = line.match(/^([A-Za-z0-9\s/().+-]+?)\s*[-:|]\s*(\d+)\s*(?:pcs|pc|nos)?$/i);
+      if (endQtyMatch) {
+        const name = endQtyMatch[1].replace(/^\s*\d+[.\s|-]*/, '').trim();
+        const qty = parseInt(endQtyMatch[2], 10);
+        if (qty > 0 && qty < 1000 && name.length >= 2 && !/total|amount|subtotal|particulars|invoice|date/i.test(name)) {
+          const cleanName = ProductNormalizer.stripNoiseWords(name) || name;
+          parsedItem = {
+            description: cleanName,
+            productCode: null,
+            hsn: null,
+            quantity: qty,
+            unit: 'PCS',
+            unitPrice: 0,
+            discount: 0,
+            taxableAmount: 0,
+            taxRate: 0,
+            taxAmount: 0,
+            total: 0,
+            confidence: 70,
+          };
+        }
+      }
+    }
+
+    if (parsedItem) {
+      items.push(parsedItem);
+    }
+  }
+
+  const calculatedSubtotal = items.reduce((sum, i) => sum + i.total, 0);
+
+  return {
+    provider: 'Tesseract/PDFTextEngine',
+    documentType: hasPrice ? 'PURCHASE_INVOICE' : 'STOCK_SHEET',
+    supplier: { name: supplierName, gstin: null, phone: null, address: null },
+    customer: { name: customerName, phone: customerPhone },
+    customerName: customerName || null,
+    customerPhone: customerPhone || null,
+    buyer: { name: customerName || 'Ashnoor Singh', gstin: null },
+    invoiceNumber: invoiceNumber || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`,
+    invoiceDate,
+    dueDate: null,
+    poNumber: null,
+    items,
+    subtotal: calculatedSubtotal,
+    discount: 0,
+    cgst: 0,
+    sgst: 0,
+    igst: 0,
+    totalTax: 0,
+    grandTotal: calculatedSubtotal,
+    confidence: {
+      supplier: supplierName ? 80 : 50,
+      invoiceNumber: invoiceNumber ? 85 : 50,
+      invoiceDate: 90,
+      gstin: 0,
+      items: items.length > 0 ? 80 : 30,
+      totals: 70,
+      overall: items.length > 0 ? 75 : 40,
+    },
+    rawText,
+  };
+}
+
+/**
+ * Tesseract Multi-Pass & PDF Engine Adapter (Fallback Engine)
  */
 export class TesseractEngineProvider extends DocumentAIProvider {
   async processDocument(filePath, mimeType = 'image/jpeg') {
     if (!filePath || !fs.existsSync(filePath)) return null;
 
     try {
-      console.log('🔍 TesseractEngineProvider: Running multi-pass Tesseract OCR...');
-      const processedPath = await ImageProcessor.preprocessImage(filePath);
+      const isPdf = mimeType === 'application/pdf' || filePath.toLowerCase().endsWith('.pdf');
+      let rawText = '';
 
-      // Pass 1: PSM 6 (Uniform text block / table)
-      const res6 = await Promise.race([
-        tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('Tesseract Timeout')), 12000))
-      ]);
-
-      let rawText = res6?.data?.text || '';
-
-      if (fs.existsSync(processedPath) && processedPath !== filePath) {
-        fs.unlinkSync(processedPath);
-      }
-
-      // Dynamic text line extraction
-      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-      const items = [];
-      let supplierName = null;
-      let invoiceNumber = null;
-      let invoiceDate = new Date().toISOString().split('T')[0];
-      let subtotal = 0;
-      let hasPrice = false;
-
-      for (const line of lines) {
-        if (/particulars|s\.no|rate|amount|qty|quantity|balance|description|e\.&o\.e|signature/i.test(line) && line.length < 40) {
-          continue;
-        }
-
-        if (/supplier|vendor|from|wholesale|traders/i.test(line) && !supplierName) {
-          supplierName = line.replace(/(supplier|vendor|from):/i, '').trim();
-        }
-
-        if (/inv|bill|invoice/i.test(line) && !invoiceNumber) {
-          const m = line.match(/(?:inv|bill|invoice)\s*#?\s*:?\s*([A-Z0-9-]+)/i);
-          if (m) invoiceNumber = m[1];
-        }
-
-        // Qty Model line pattern (Supports 3-column [SrNo] [Qty] [Model] & 2-column [Qty] [Model])
-        // e.g. "1 2 J2", "2 6 J5", "12 3 A14 4G", "16 1 9C Lite", "17 2 58 BT", "23 4 49 FX"
-        const stockMatch3 = line.match(/^(?:(\d+)[.\s|-]+)?(\d+)\s+([A-Za-z0-9\s/().+-]+)$/);
-        if (stockMatch3) {
-          const qty = parseInt(stockMatch3[2], 10);
-          const name = stockMatch3[3].trim();
-          if (qty > 0 && qty < 1000 && name.length >= 1 && !/total|amount|signature|date|particulars|s\.no/i.test(name)) {
-            items.push({
-              description: name,
-              productCode: null,
-              hsn: null,
-              quantity: qty,
-              unit: 'PCS',
-              unitPrice: 0,
-              discount: 0,
-              taxableAmount: 0,
-              taxRate: 0,
-              taxAmount: 0,
-              total: 0,
-              confidence: 75,
-            });
-            continue;
-          }
+      if (isPdf) {
+        console.log('📄 TesseractEngineProvider: Extracting text from PDF document via pdf-parse...');
+        try {
+          const fileBuffer = fs.readFileSync(filePath);
+          const pdfData = await pdfParse(fileBuffer);
+          rawText = pdfData?.text || '';
+        } catch (pdfErr) {
+          console.warn('PDF parse fallback warning:', pdfErr.message);
         }
       }
 
-      return {
-        provider: 'TesseractEngine',
-        documentType: hasPrice ? 'PURCHASE_INVOICE' : 'STOCK_SHEET',
-        supplier: { name: supplierName, gstin: null, phone: null, address: null },
-        buyer: { name: 'Ashnoor Singh', gstin: null },
-        invoiceNumber: invoiceNumber || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`,
-        invoiceDate,
-        dueDate: null,
-        poNumber: null,
-        items,
-        subtotal: 0,
-        discount: 0,
-        cgst: 0,
-        sgst: 0,
-        igst: 0,
-        totalTax: 0,
-        grandTotal: 0,
-        confidence: {
-          supplier: supplierName ? 80 : 50,
-          invoiceNumber: invoiceNumber ? 85 : 50,
-          invoiceDate: 90,
-          gstin: 0,
-          items: items.length > 0 ? 80 : 30,
-          totals: 70,
-          overall: items.length > 0 ? 75 : 40,
-        },
-        rawText,
-      };
+      if (!rawText || rawText.trim().length === 0) {
+        console.log('🔍 TesseractEngineProvider: Running multi-pass Tesseract OCR on image file...');
+        const prep = await ImageProcessor.preprocessForVisionAI(filePath);
+        const processedPath = prep && prep.buffer ? `${filePath}_proc.jpg` : filePath;
+
+        if (prep && prep.buffer) {
+          fs.writeFileSync(processedPath, prep.buffer);
+        }
+
+        try {
+          const res6 = await Promise.race([
+            tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Tesseract Timeout')), 12000))
+          ]);
+          rawText = res6?.data?.text || '';
+        } catch (tessErr) {
+          console.warn('Tesseract OCR pass failed:', tessErr.message);
+        }
+
+        if (processedPath !== filePath && fs.existsSync(processedPath)) {
+          try { fs.unlinkSync(processedPath); } catch (e) {}
+        }
+      }
+
+      console.log(`--- OCR / PDF EXTRACTED ${rawText.length} CHARS ---`);
+
+      return parseExtractedText(rawText);
     } catch (err) {
       console.warn('TesseractEngineProvider error:', err.message);
       return null;
@@ -278,14 +521,14 @@ export class DocumentAIOrchestrator {
       }
     }
 
-    // Fallback to Fast Tesseract engine adapter
+    // Fallback to Fast Tesseract & PDF engine adapter
     const tesseractAdapter = new TesseractEngineProvider();
     const tesseractResult = await tesseractAdapter.processDocument(filePath, mimeType);
-    if (tesseractResult && tesseractResult.items) {
+    if (tesseractResult && tesseractResult.items && tesseractResult.items.length > 0) {
       return tesseractResult;
     }
 
-    return {
+    return tesseractResult || {
       provider: 'None',
       documentType: 'STOCK_SHEET',
       supplier: { name: null, gstin: null, phone: null, address: null },
@@ -303,7 +546,7 @@ export class DocumentAIOrchestrator {
       totalTax: 0,
       grandTotal: 0,
       confidence: { supplier: 0, invoiceNumber: 0, invoiceDate: 0, gstin: 0, items: 0, totals: 0, overall: 0 },
-      rawText: 'No text extracted. Please retake photo with better lighting or enable AI Vision API Key.',
+      rawText: 'No text extracted. Please retake photo with better lighting or ensure file is legible.',
     };
   }
 }

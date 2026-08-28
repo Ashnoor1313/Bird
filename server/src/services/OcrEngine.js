@@ -2,8 +2,11 @@ import tesseract from 'tesseract.js';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import pdfParse from 'pdf-parse';
 import { GoogleGenAI } from '@google/genai';
 import { ProductNormalizer } from './ProductNormalizer.js';
+import { ImageProcessor } from './ImageProcessor.js';
+import { parseExtractedText } from './DocumentAIProvider.js';
 
 export class OcrEngine {
   /**
@@ -29,17 +32,32 @@ export class OcrEngine {
         }
       }
 
-      // 2. MULTI-PASS PREPROCESSING (SHARP + TESSERACT LINE-BY-LINE CLUSTERING)
+      // 2. TEXT PDF OR MULTI-PASS IMAGE OCR
       let rawText = '';
-      if (filePath && fs.existsSync(filePath)) {
+      const isPdf = filePath.toLowerCase().endsWith('.pdf');
+
+      if (isPdf) {
+        try {
+          const pdfBuffer = fs.readFileSync(filePath);
+          const pdfData = await pdfParse(pdfBuffer);
+          rawText = pdfData?.text || '';
+        } catch (pdfErr) {
+          console.warn('PDF parsing error in OcrEngine:', pdfErr.message);
+        }
+      }
+
+      if ((!rawText || rawText.trim().length === 0) && filePath && fs.existsSync(filePath)) {
         const processedPath = `${filePath}_proc.png`;
         try {
-          await sharp(filePath)
-            .resize({ width: 2400, fit: 'inside', withoutEnlargement: false })
-            .grayscale()
-            .linear(1.6, -0.25) // High contrast ink binarization
-            .sharpen({ sigma: 1.8 })
-            .toFile(processedPath);
+          const prep = await ImageProcessor.preprocessForVisionAI(filePath);
+          if (prep && prep.buffer) {
+            fs.writeFileSync(processedPath, prep.buffer);
+          } else {
+            await sharp(filePath)
+              .resize({ width: 2400, fit: 'inside', withoutEnlargement: false })
+              .grayscale()
+              .toFile(processedPath);
+          }
 
           // Pass 1: PSM 6 (Uniform Block)
           const resultPsm6 = await Promise.race([
@@ -94,8 +112,19 @@ export class OcrEngine {
    */
   static async scanWithGeminiVision(filePath, apiKey) {
     const ai = new GoogleGenAI({ apiKey });
-    const imageBytes = fs.readFileSync(filePath);
-    const base64Image = imageBytes.toString('base64');
+    const isPdf = filePath.toLowerCase().endsWith('.pdf');
+
+    let base64Image = '';
+    let targetMimeType = 'image/jpeg';
+
+    if (isPdf) {
+      base64Image = fs.readFileSync(filePath).toString('base64');
+      targetMimeType = 'application/pdf';
+    } else {
+      const prep = await ImageProcessor.preprocessForVisionAI(filePath);
+      base64Image = (prep?.buffer || fs.readFileSync(filePath)).toString('base64');
+      targetMimeType = prep?.mimeType || 'image/jpeg';
+    }
 
     const prompt = `You are an expert OCR document scanner for mobile spare-parts shop invoices and handwritten stock sheets (like Vyapar / MyBillBook OCR).
 Examine this document / handwritten bill photo carefully.
@@ -123,38 +152,34 @@ Return ONLY valid JSON:
   ]
 }`;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image,
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let response = null;
+
+    for (const mName of modelsToTry) {
+      try {
+        response = await ai.models.generateContent({
+          model: mName,
+          contents: [
+            {
+              inlineData: {
+                mimeType: targetMimeType,
+                data: base64Image,
+              },
             },
-          },
-          prompt,
-        ],
-      });
-    } catch (e) {
-      // Fallback to gemini-1.5-flash if 2.0 is unavailable
-      response = await ai.models.generateContent({
-        model: 'gemini-1.5-flash',
-        contents: [
-          {
-            inlineData: {
-              mimeType: 'image/jpeg',
-              data: base64Image,
-            },
-          },
-          prompt,
-        ],
-      });
+            prompt,
+          ],
+        });
+        if (response && response.text) break;
+      } catch (e) {
+        console.warn(`OcrEngine Gemini model ${mName} call failed:`, e.message);
+      }
     }
 
+    if (!response || !response.text) return null;
+
     const text = response.text;
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
       if (parsed.items && Array.isArray(parsed.items) && parsed.items.length > 0) {
@@ -171,8 +196,8 @@ Return ONLY valid JSON:
 
         return {
           docType: parsed.docType || (hasAnyPrice ? 'PURCHASE_BILL' : 'STOCK_SHEET'),
-          supplierName: parsed.supplierName || 'Handwritten Stock Sheet',
-          customerName: parsed.customerName || 'Ashnoor Singh',
+          supplierName: parsed.supplierName || 'Wholesale Supplier',
+          customerName: parsed.customerName || 'Customer',
           billNo: parsed.billNo || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`,
           date: parsed.date || new Date().toISOString().split('T')[0],
           items: parsed.items,
@@ -191,116 +216,26 @@ Return ONLY valid JSON:
    * Intelligently classify document type and extract structured items dynamically from raw text
    */
   static parseDocumentText(rawText) {
-    const lines = (rawText || '').split('\n').map(l => l.trim()).filter(Boolean);
-
-    let supplierName = '';
-    let customerName = '';
-    let billNo = '';
-    let date = new Date().toISOString().split('T')[0];
-    const items = [];
-    let hasAnyPrice = false;
-
-    for (const line of lines) {
-      // Skip table headers and structural noise
-      if (/particulars|s\.no|rate|amount|qty|quantity|balance|description|signature|e\.&o\.e/i.test(line) && line.length < 40) {
-        continue;
-      }
-
-      // Detect Supplier
-      if (/supplier|vendor|from|wholesale|traders|mobiles/i.test(line) && !supplierName) {
-        supplierName = line.replace(/(supplier|vendor|from):/i, '').trim();
-      }
-
-      // Detect Customer Name
-      if (/(?:customer|client|to|m\/s|name|buyer)\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i.test(line) && !customerName) {
-        const match = line.match(/(?:customer|client|to|m\/s|name|buyer)\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i);
-        if (match && match[1] && match[1].trim().length > 2) {
-          customerName = match[1].trim();
-        }
-      }
-
-      // 1. Math Validation Strategy (Qty * Rate = Total)
-      const numbers = [];
-      const numRegex = /\b\d+(?:\.\d+)?\b/g;
-      let m;
-      while ((m = numRegex.exec(line)) !== null) {
-        numbers.push({ val: parseFloat(m[0]), raw: m[0], index: m.index });
-      }
-
-      if (numbers.length >= 2) {
-        let matchedMath = false;
-        for (let i = 0; i < numbers.length; i++) {
-          for (let j = 0; j < numbers.length; j++) {
-            if (i === j) continue;
-            for (let k = 0; k < numbers.length; k++) {
-              if (k === i || k === j) continue;
-              const qty = numbers[i].val;
-              const rate = numbers[j].val;
-              const amt = numbers[k].val;
-
-              if (qty > 0 && qty <= 1000 && rate > 50 && Math.abs(qty * rate - amt) < 10) {
-                let text = line;
-                [numbers[i], numbers[j], numbers[k]].forEach(n => {
-                  text = text.replace(n.raw, '');
-                });
-                text = text.replace(/^\s*\d+[.\s|-]*/, '').replace(/[^a-zA-Z0-9\s/().-]/g, ' ').trim();
-                const cleanedName = ProductNormalizer.stripNoiseWords(text) || text || 'Spare Part Item';
-
-                items.push({
-                  productName: cleanedName,
-                  quantity: qty,
-                  unitPrice: rate,
-                  gstPercentage: 0,
-                  total: Math.round(qty * rate),
-                  hasPrice: true,
-                });
-                hasAnyPrice = true;
-                matchedMath = true;
-                break;
-              }
-            }
-            if (matchedMath) break;
-          }
-          if (matchedMath) break;
-        }
-        if (matchedMath) continue;
-      }
-
-      // 2. Handwritten Stock Sheet Line Pattern (e.g. "1 2 J2", "2 6 J5", "3 6 J7", "4 4 J7 Prime", "5 1 A70", "6 1 A10S", "7 1 A51", "8 1 A11", "9 3 A31", "10 1 M11")
-      const stockMatch = line.match(/^(?:\d+[.\s|-]+)?(\d+)\s+([A-Za-z0-9\s/().+-]+)$/);
-      if (stockMatch) {
-        const qty = parseInt(stockMatch[1], 10);
-        const name = stockMatch[2].trim();
-        if (qty > 0 && qty < 1000 && name.length >= 1 && !/total|amount|signature|date|particulars/i.test(name)) {
-          const cleanedName = ProductNormalizer.stripNoiseWords(name) || name;
-          items.push({
-            productName: cleanedName,
-            quantity: qty,
-            unitPrice: 0,
-            gstPercentage: 0,
-            total: 0,
-            hasPrice: false,
-          });
-          continue;
-        }
-      }
-    }
-
-    const docType = hasAnyPrice ? 'PURCHASE_BILL' : 'STOCK_SHEET';
-    let subtotal = 0;
-    items.forEach(i => subtotal += i.quantity * (i.unitPrice || 0));
-
+    const result = parseExtractedText(rawText);
     return {
-      docType,
-      supplierName: supplierName || (docType === 'STOCK_SHEET' ? 'Handwritten Stock Sheet' : 'Wholesale Mobile Supplier'),
-      customerName: customerName || 'Ashnoor Singh',
-      billNo: billNo || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`,
-      date,
-      items,
-      subtotal,
+      docType: result.documentType,
+      supplierName: result.supplier?.name || (result.documentType === 'STOCK_SHEET' ? 'Handwritten Stock Sheet' : 'Wholesale Mobile Supplier'),
+      customerName: result.customerName || result.customer?.name || 'Customer',
+      customerPhone: result.customerPhone || null,
+      billNo: result.invoiceNumber,
+      date: result.invoiceDate,
+      items: result.items.map(i => ({
+        productName: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        gstPercentage: i.taxRate || 0,
+        total: i.total,
+        hasPrice: i.unitPrice > 0,
+      })),
+      subtotal: result.subtotal,
       gst: 0,
-      total: subtotal,
-      verified: items.length > 0,
+      total: result.grandTotal,
+      verified: result.items.length > 0,
       rawText,
     };
   }

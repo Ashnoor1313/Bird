@@ -10,6 +10,8 @@ import {
   ArrowRight,
   TrendingUp,
   Tag,
+  Camera,
+  FileText,
 } from 'lucide-react';
 import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
@@ -357,14 +359,7 @@ export const CategoryScanStockModal = ({
         <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
           {step === 'upload' && (
             <div className="space-y-4">
-              <div className="border-2 border-dashed border-slate-200 hover:border-slate-400 bg-slate-50/50 rounded-2xl p-6 sm:p-8 text-center transition-colors relative">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                />
-                
+              <div className="border-2 border-dashed border-slate-200 bg-slate-50/50 rounded-2xl p-5 sm:p-7 text-center transition-colors">
                 {previewUrl ? (
                   <div className="space-y-3">
                     <img
@@ -376,24 +371,52 @@ export const CategoryScanStockModal = ({
                       {file?.name}
                     </p>
                     <p className="text-[11px] text-slate-400 font-medium">
-                      Supports mobile camera capture, paper invoices, wholesale receipts & WhatsApp bill screenshots
+                      Supports mobile camera photo, paper invoices, handwritten slips & PDF documents
                     </p>
-                    <div className="inline-flex items-center gap-1 text-xs text-blue-600 font-bold bg-blue-50 px-3 py-1 rounded-lg">
-                      <span>Change File</span>
+                    <div className="flex justify-center gap-2 pt-1">
+                      <label className="btn-secondary py-1.5 px-3 text-xs cursor-pointer font-bold">
+                        <span>Change File</span>
+                        <input type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
+                      </label>
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mx-auto text-slate-700 shadow-2xs">
+                  <div className="space-y-4">
+                    <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mx-auto text-slate-700 shadow-2xs">
                       <Upload className="w-6 h-6 text-slate-700" />
                     </div>
                     <div className="space-y-1">
                       <p className="text-sm font-bold text-slate-800">
-                        Drop your stock bill here, or <span className="text-blue-600 underline">browse</span>
+                        Upload or Snap Photo of Stock Sheet / Bill
                       </p>
                       <p className="text-xs text-slate-500 font-medium">
-                        Supports photo of handwritten lists, supplier invoices, WhatsApp bill screenshots
+                        Reads handwritten lists, supplier invoices, PDFs & receipts instantly
                       </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                      <label className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95">
+                        <Camera className="w-4 h-4" />
+                        <span>Snap Photo (Camera)</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <label className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95">
+                        <Upload className="w-4 h-4 text-slate-300" />
+                        <span>Browse Image / PDF</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={handleFileChange}
+                          className="hidden"
+                        />
+                      </label>
                     </div>
                   </div>
                 )}

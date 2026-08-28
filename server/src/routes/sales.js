@@ -61,7 +61,7 @@ router.get('/', async (req, res) => {
 // SCAN SALE BILL OCR ENDPOINT (Contextual category matching)
 router.post('/scan', upload.single('billFile'), async (req, res) => {
   try {
-    const { businessId, locationId, categoryId = 'folders' } = req.body;
+    const { businessId, locationId, categoryId = 'folders', geminiApiKey } = req.body;
     if (!businessId) {
       return res.status(400).json({ error: 'businessId required' });
     }
@@ -70,7 +70,7 @@ router.post('/scan', upload.single('billFile'), async (req, res) => {
     }
 
     const imagePath = req.file.path;
-    const docResult = await DocumentAIOrchestrator.processDocument(imagePath, req.file.mimetype);
+    const docResult = await DocumentAIOrchestrator.processDocument(imagePath, req.file.mimetype, { geminiApiKey });
 
     // Extract items
     const rawItems = (docResult.items || []).map(item => {

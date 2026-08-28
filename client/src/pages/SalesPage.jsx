@@ -169,6 +169,56 @@ export const SalesPage = () => {
     }
   };
 
+  // Fast client-side image compressor for instant OCR scanning
+  const compressImageFile = async (imageFile) => {
+    if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX_DIM = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          } else if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressed);
+              } else {
+                resolve(imageFile);
+              }
+            },
+            'image/jpeg',
+            0.82
+          );
+        };
+        img.onerror = () => resolve(imageFile);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(imageFile);
+      reader.readAsDataURL(imageFile);
+    });
+  };
+
   // Auto-Fill Invoice from Photo / Paper Slip
   const handleScanBillImageForModal = async (e) => {
     const file = e.target.files[0];
@@ -176,10 +226,11 @@ export const SalesPage = () => {
 
     setOcrScanningModal(true);
     try {
+      const optimizedFile = await compressImageFile(file);
       const formData = new FormData();
       formData.append('businessId', activeBusinessId);
       formData.append('categoryId', billingCategoryId);
-      formData.append('billFile', file);
+      formData.append('billFile', optimizedFile);
 
       const res = await fetch('/api/sales/scan', {
         method: 'POST',
@@ -227,15 +278,19 @@ export const SalesPage = () => {
             };
           });
           setBillItems(autoFilledItems);
-          addToast(`✨ Auto-filled ${autoFilledItems.length} items & customer details from photo!`, 'success');
+          addToast(`✨ Auto-filled ${autoFilledItems.length} items & customer details from document!`, 'success');
+        } else {
+          addToast('Document scanned, but no clear line items detected. Please ensure image/PDF is readable.', 'info');
         }
       } else {
-        addToast('Failed to parse bill image', 'error');
+        addToast('Failed to parse document file', 'error');
       }
     } catch (err) {
-      addToast('Error reading bill image', 'error');
+      console.error('OCR Error:', err);
+      addToast('Error reading document file', 'error');
     } finally {
       setOcrScanningModal(false);
+      e.target.value = '';
     }
   };
 
@@ -627,20 +682,41 @@ export const SalesPage = () => {
                   </div>
                 </div>
 
-                <label className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 cursor-pointer shrink-0 transition-all active:scale-95">
+                <div className="flex items-center gap-2 shrink-0">
                   {ocrScanningModal ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Reading Document...</span>
-                    </>
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-md">
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      <span>Scanning Document...</span>
+                    </div>
                   ) : (
                     <>
-                      <Upload className="w-4 h-4" />
-                      <span>Upload Bill Image (OCR)</span>
+                      <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 cursor-pointer transition-all active:scale-95">
+                        <Camera className="w-4 h-4" />
+                        <span>Snap Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleScanBillImageForModal}
+                          className="hidden"
+                          disabled={ocrScanningModal}
+                        />
+                      </label>
+
+                      <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs shadow-md cursor-pointer transition-all active:scale-95">
+                        <Upload className="w-4 h-4 text-zinc-300" />
+                        <span>Upload File</span>
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          onChange={handleScanBillImageForModal}
+                          className="hidden"
+                          disabled={ocrScanningModal}
+                        />
+                      </label>
                     </>
                   )}
-                  <input type="file" accept="image/*,.pdf" onChange={handleScanBillImageForModal} className="hidden" disabled={ocrScanningModal} />
-                </label>
+                </div>
               </div>
 
               {/* Step 1: Customer Selection */}

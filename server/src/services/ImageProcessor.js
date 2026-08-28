@@ -9,7 +9,12 @@ export class ImageProcessor {
    */
   static async analyzeImageQuality(filePath) {
     if (!filePath || !fs.existsSync(filePath)) {
-      return { qualityScore: 0, warnings: ['Image file not found'] };
+      return { qualityScore: 0, warnings: ['Document file not found'] };
+    }
+
+    // Skip sharp analysis for PDF files
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      return { width: 1200, height: 1600, qualityScore: 95, warnings: [] };
     }
 
     try {
@@ -54,7 +59,7 @@ export class ImageProcessor {
       };
     } catch (err) {
       console.warn('Image quality analysis warning:', err.message);
-      return { qualityScore: 70, warnings: [] };
+      return { qualityScore: 80, warnings: [] };
     }
   }
 
@@ -63,23 +68,32 @@ export class ImageProcessor {
    * Auto-orients EXIF, downsizes from 40MP camera files to optimal OCR resolution (1400px),
    * and cleans noise so processing is 5x faster and 99.9% accurate.
    * @param {string} filePath
-   * @returns {Promise<Buffer>}
+   * @returns {Promise<{ buffer: Buffer, mimeType: string }>}
    */
   static async preprocessForVisionAI(filePath) {
     if (!filePath || !fs.existsSync(filePath)) return null;
+
+    if (filePath.toLowerCase().endsWith('.pdf')) {
+      return { buffer: fs.readFileSync(filePath), mimeType: 'application/pdf' };
+    }
 
     try {
       const optimizedBuffer = await sharp(filePath)
         .rotate() // Auto-rotate according to EXIF orientation tag
         .resize({ width: 1400, height: 1800, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 82, progressive: true })
+        .jpeg({ quality: 85, progressive: true })
         .toBuffer();
 
-      return optimizedBuffer;
+      return { buffer: optimizedBuffer, mimeType: 'image/jpeg' };
     } catch (err) {
-      console.warn('Vision AI preprocessing fallback to raw buffer:', err.message);
-      return fs.readFileSync(filePath);
+      console.warn('Vision AI preprocessing fallback to raw file buffer:', err.message);
+      const ext = path.extname(filePath).toLowerCase();
+      let mimeType = 'image/jpeg';
+      if (ext === '.png') mimeType = 'image/png';
+      else if (ext === '.pdf') mimeType = 'application/pdf';
+      return { buffer: fs.readFileSync(filePath), mimeType };
     }
   }
 }
+
 
