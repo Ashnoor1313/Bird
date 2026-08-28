@@ -20,27 +20,31 @@ export class ProductNormalizer {
   ];
 
   /**
-   * Noise words, category qualifiers, quality tags, and bill abbreviations to ignore and remove
+   * Noise words, quality tags, currency symbols, and bill abbreviations to clean
    */
-  static NOISE_REGEX = /\b(?:\d+\s*(?:pcs?|pc|pieces?)|incell|in-cell|in\s+cell|wd|w\/d|bid|big|cc|c\.c|sub\s*board|subboard|sub-|sub|bord|board|oem|og|100%\s*og|service\s*pack|copy|first\s*copy|orig|original|assembly|aaa|grade\s*[a-c]|grade|premium|diamond|crown|oled|amoled|tft|lcd|touch|combo|display|folder|housing|with\s+frame|without\s+frame|w\/f|wo\/f|wf|wof|pcs|pc|qty|rate|amt|total)\b/gi;
+  static NOISE_REGEX = /\b(?:\d+\s*(?:pcs?|pc|pieces?|nos)|incell|in-cell|in\s+cell|wd|w\/d|bid|big|sub\s*board|subboard|sub-|oem|og|100%\s*og|service\s*pack|copy|first\s*copy|orig|original|assembly|aaa|grade\s*[a-c]|grade|premium|diamond|crown|with\s+frame|without\s+frame|w\/f|wo\/f|wf|wof|pcs|pc|nos|qty|quantity|rate|price|cost|amt|amount|total|grand\s*total|subtotal|rs\.?|inr|particulars|s\.no|sl\.?\s*no)\b/gi;
 
   /**
-   * Strip all noise words (incell, wd, bid, cc, bord, oem, etc.) and return a clean model name
-   * e.g. "Samsung A15 incell wd 10pcs" -> "Samsung A15"
-   * e.g. "Redmi Note 10 cc bid 5pcs" -> "Redmi Note 10"
-   * e.g. "Vivo Y21 bord oem" -> "Vivo Y21"
+   * Clean noise tags (incell, wd, oem, copy, rs, pcs, etc.) and return clean product/model description
    */
   static stripNoiseWords(rawText) {
     if (!rawText) return '';
     let text = String(rawText)
       .replace(this.NOISE_REGEX, ' ')
-      .replace(/\b\d+\s*pcs?\b/gi, ' ')
-      .replace(/[^\w\s/+.#-]/g, ' ')
+      .replace(/\b\d+\s*(?:pcs?|pc|nos)\b/gi, ' ')
+      .replace(/[\/\\@#=|_~]+/g, ' ')
+      .replace(/[-:]+\s*$/g, ' ')
+      .replace(/[-:]+\s*(?=[-\s])/g, ' ')
+      .replace(/\b\d+[-/]\d+[-/]\d+\b/g, ' ') // Strip dates if on item line
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Clean up single trailing stray letters or symbols
-    text = text.replace(/\s+[-/+#]\s*$/, '').trim();
+    // Remove trailing/leading stray symbols, dots, x multipliers, and leading serial numbers (e.g. "1." or "2. ")
+    text = text.replace(/\s+[xX]\b/g, ' ')
+      .replace(/^\d+[.\s|-]+/, '')
+      .replace(/[\s./\\@#=|_~:-]+$/g, '')
+      .replace(/^[\s./\\@#=|_~:-]+/g, '')
+      .trim();
 
     // Title case if all lowercase or all uppercase
     if (text === text.toLowerCase() || text === text.toUpperCase()) {

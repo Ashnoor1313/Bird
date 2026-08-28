@@ -207,15 +207,17 @@ export function parseExtractedText(rawText) {
     }
 
     // 1. Detect Supplier Name
-    if (/supplier|vendor|from|wholesale|traders|mobiles|distributor|enterprises/i.test(line) && !supplierName) {
-      const match = line.match(/(?:supplier|vendor|from|wholesale|traders|mobiles|distributor)\s*[:#-]?\s*([A-Za-z0-9\s.&'-]+)/i);
-      supplierName = match ? match[1].trim() : line.replace(/(supplier|vendor|from):/i, '').trim();
+    if (/\b(?:supplier|vendor|from|wholesale|traders|mobiles|distributor|enterprises)\b/i.test(line) && !supplierName) {
+      const match = line.match(/\b(?:supplier|vendor|from|wholesale|traders|mobiles|distributor)\b\s*[:#-]?\s*([A-Za-z0-9\s.&'-]+)/i);
+      if (match && match[1] && !/particulars|date|invoice|sl\.?\s*no/i.test(match[1])) {
+        supplierName = match[1].trim();
+      }
     }
 
     // 2. Detect Customer Name / Phone
-    if (/(?:customer|client|to|buyer|party|m\/s|bill to)\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i.test(line) && !customerName) {
-      const match = line.match(/(?:customer|client|to|buyer|party|m\/s|bill to)\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i);
-      if (match && match[1] && match[1].trim().length > 2 && !/invoice|date|number/i.test(match[1])) {
+    if (/\b(?:customer|client|buyer|party|m\/s|bill to)\b\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i.test(line) && !customerName) {
+      const match = line.match(/\b(?:customer|client|buyer|party|m\/s|bill to)\b\s*[:#-]?\s*([A-Za-z0-9\s.]+)/i);
+      if (match && match[1] && match[1].trim().length > 2 && !/invoice|date|number|particulars/i.test(match[1])) {
         customerName = match[1].trim();
       }
     }
@@ -228,7 +230,7 @@ export function parseExtractedText(rawText) {
     // 3. Detect Invoice Number
     if (/(?:inv|bill|invoice|receipt|sl\.?\s*no)\s*(?:no\.?|num\.?)?\s*[:#-]?\s*\b([A-Z0-9/-]{3,})\b/i.test(line) && !invoiceNumber) {
       const m = line.match(/(?:inv|bill|invoice|receipt|sl\.?\s*no)\s*(?:no\.?|num\.?)?\s*[:#-]?\s*\b([A-Z0-9/-]{3,})\b/i);
-      if (m && m[1] && !/invoice|receipt|tax|bill/i.test(m[1])) invoiceNumber = m[1];
+      if (m && m[1] && !/invoice|receipt|tax|bill|sheet/i.test(m[1])) invoiceNumber = m[1];
     }
 
     // 4. Detect Date
@@ -262,9 +264,9 @@ export function parseExtractedText(rawText) {
             if (qty > 0 && qty <= 1000 && rate > 0 && Math.abs(qty * rate - amt) <= Math.max(2, amt * 0.05)) {
               let nameText = line;
               [numbers[i], numbers[j], numbers[k]].forEach(n => {
-                nameText = nameText.replace(n.raw, '');
+                const escaped = String(n.raw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                nameText = nameText.replace(new RegExp(`\\b${escaped}\\b`, 'g'), ' ');
               });
-              nameText = nameText.replace(/^\s*\d+[.\s|-]*/, '').replace(/[^a-zA-Z0-9\s/().+-]/g, ' ').trim();
               const cleanName = ProductNormalizer.stripNoiseWords(nameText) || nameText || 'Spare Part Item';
 
               if (cleanName.length >= 2 && !/subtotal|total|amount|signature|date|particulars/i.test(cleanName)) {
@@ -468,22 +470,29 @@ export class TesseractEngineProvider extends DocumentAIProvider {
       }
 
       if (!rawText || rawText.trim().length === 0) {
-        console.log('🔍 TesseractEngineProvider: Running multi-pass Tesseract OCR on image file...');
-        const prep = await ImageProcessor.preprocessForVisionAI(filePath);
-        const processedPath = prep && prep.buffer ? `${filePath}_proc.jpg` : filePath;
-
-        if (prep && prep.buffer) {
-          fs.writeFileSync(processedPath, prep.buffer);
-        }
+        console.log('🔍 TesseractEngineProvider: Running high-contrast multi-pass Tesseract OCR...');
+        const processedPath = await ImageProcessor.preprocessForTesseract(filePath);
 
         try {
+          // Pass 1: PSM 6 (Uniform text block / table)
           const res6 = await Promise.race([
             tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '6' }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Tesseract Timeout')), 12000))
           ]);
           rawText = res6?.data?.text || '';
+
+          // Pass 2: PSM 3 (Auto Page Layout) if text is sparse
+          if ((!rawText || rawText.trim().length < 40) && processedPath) {
+            const res3 = await Promise.race([
+              tesseract.recognize(processedPath, 'eng', { tessedit_pageseg_mode: '3' }),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Tesseract Timeout')), 12000))
+            ]);
+            if (res3?.data?.text) {
+              rawText += '\n' + res3.data.text;
+            }
+          }
         } catch (tessErr) {
-          console.warn('Tesseract OCR pass failed:', tessErr.message);
+          console.warn('Tesseract OCR pass notice:', tessErr.message);
         }
 
         if (processedPath !== filePath && fs.existsSync(processedPath)) {

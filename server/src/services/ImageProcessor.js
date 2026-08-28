@@ -94,6 +94,30 @@ export class ImageProcessor {
       return { buffer: fs.readFileSync(filePath), mimeType };
     }
   }
+
+  /**
+   * High-Contrast Image Preprocessing & Binarization for Local Tesseract OCR
+   * Converts camera photos to high-contrast binarized grayscale images so ink text pops out
+   * @param {string} filePath
+   * @returns {Promise<string>}
+   */
+  static async preprocessForTesseract(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) return filePath;
+    if (filePath.toLowerCase().endsWith('.pdf')) return filePath;
+
+    const processedPath = `${filePath}_tess.png`;
+    try {
+      await sharp(filePath)
+        .rotate()
+        .resize({ width: 2200, fit: 'inside', withoutEnlargement: false })
+        .grayscale()
+        .linear(1.5, -0.2) // Binarize contrast (black ink on white paper)
+        .sharpen({ sigma: 1.5 })
+        .toFile(processedPath);
+      return processedPath;
+    } catch (err) {
+      console.warn('Tesseract binarization notice:', err.message);
+      return filePath;
+    }
+  }
 }
-
-
