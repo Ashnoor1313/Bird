@@ -30,7 +30,7 @@ export const recognizeOCR = async (imagePath, lang = 'eng', options = {}) => {
 export function isValidGeminiApiKey(key) {
   if (!key || typeof key !== 'string') return false;
   const trimmed = key.trim();
-  return trimmed.length > 20 && trimmed.startsWith('AIzaSy');
+  return trimmed.length >= 10 && !trimmed.includes('YOUR_API_KEY') && !trimmed.includes('your_key_here');
 }
 
 /**
@@ -43,19 +43,23 @@ export class DocumentAIProvider {
 }
 
 /**
- * Google Gemini Multimodal Vision Document AI Adapter
+ * Google Gemini Multimodal Vision Document AI Adapter (SDK + REST Dual-Strategy)
  */
 export class GoogleGeminiDocumentAIProvider extends DocumentAIProvider {
   constructor(apiKey) {
     super();
-    this.apiKey = apiKey;
-    if (apiKey && isValidGeminiApiKey(apiKey)) {
-      this.ai = new GoogleGenAI({ apiKey });
+    this.apiKey = apiKey ? apiKey.trim() : null;
+    if (this.apiKey && isValidGeminiApiKey(this.apiKey)) {
+      try {
+        this.ai = new GoogleGenAI({ apiKey: this.apiKey });
+      } catch (e) {
+        console.warn('GoogleGenAI constructor notice:', e.message);
+      }
     }
   }
 
   async processDocument(filePath, mimeType = 'image/jpeg') {
-    if (!this.ai || !filePath || !fs.existsSync(filePath)) {
+    if (!this.apiKey || !filePath || !fs.existsSync(filePath)) {
       return null;
     }
 
@@ -125,36 +129,85 @@ Rules for mobile spare-parts accuracy:
 5. Return ONLY the JSON object. Do not include markdown preamble.`;
 
       const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-      let response = null;
-      let lastErr = null;
+      let extractedText = null;
 
+      // STRATEGY 1: Native REST API with strict application/json response
       for (const modelName of modelsToTry) {
         try {
-          response = await this.ai.models.generateContent({
-            model: modelName,
+          const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
+          const restPayload = {
             contents: [
               {
-                inlineData: {
-                  mimeType: targetMimeType,
-                  data: base64Data,
-                },
+                parts: [
+                  { text: prompt },
+                  {
+                    inline_data: {
+                      mime_type: targetMimeType,
+                      data: base64Data,
+                    },
+                  },
+                ],
               },
-              prompt,
             ],
+            generationConfig: {
+              temperature: 0.1,
+              response_mime_type: 'application/json',
+            },
+          };
+
+          const restRes = await fetch(restUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(restPayload),
           });
-          if (response && response.text) break;
-        } catch (mErr) {
-          console.warn(`Gemini model ${modelName} call failed:`, mErr.message);
-          lastErr = mErr;
+
+          if (restRes.ok) {
+            const data = await restRes.json();
+            const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (candidateText) {
+              extractedText = candidateText;
+              break;
+            }
+          } else {
+            const errData = await restRes.text();
+            console.warn(`Gemini REST model ${modelName} returned status ${restRes.status}:`, errData.slice(0, 150));
+          }
+        } catch (rErr) {
+          console.warn(`Gemini REST request for ${modelName} notice:`, rErr.message);
         }
       }
 
-      if (!response || !response.text) {
-        throw lastErr || new Error('No response from Gemini API models');
+      // STRATEGY 2: @google/genai SDK fallback if REST did not return
+      if (!extractedText && this.ai) {
+        for (const modelName of modelsToTry) {
+          try {
+            const response = await this.ai.models.generateContent({
+              model: modelName,
+              contents: [
+                {
+                  inlineData: {
+                    mimeType: targetMimeType,
+                    data: base64Data,
+                  },
+                },
+                prompt,
+              ],
+            });
+            if (response && response.text) {
+              extractedText = response.text;
+              break;
+            }
+          } catch (mErr) {
+            console.warn(`Gemini SDK model ${modelName} notice:`, mErr.message);
+          }
+        }
       }
 
-      const text = response.text || '';
-      const cleanJsonText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+      if (!extractedText) {
+        return null;
+      }
+
+      const cleanJsonText = extractedText.replace(/```json/gi, '').replace(/```/g, '').trim();
       const jsonMatch = cleanJsonText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
@@ -200,7 +253,7 @@ Rules for mobile spare-parts accuracy:
               invoiceNumber: 90,
               invoiceDate: 95,
             },
-            rawText: text,
+            rawText: extractedText,
           };
         }
       }
@@ -543,7 +596,7 @@ export class DocumentAIOrchestrator {
   static async processDocument(filePath, mimeType = 'image/jpeg', options = {}) {
     const apiKey = options.geminiApiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
 
-    // Try Primary specialized Gemini Document AI adapter first if valid API key exists
+    // Try Primary specialized Gemini Document AI adapter first if API key exists
     if (apiKey && isValidGeminiApiKey(apiKey)) {
       try {
         const geminiAdapter = new GoogleGeminiDocumentAIProvider(apiKey);

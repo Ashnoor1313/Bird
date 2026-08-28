@@ -17,11 +17,11 @@ export class OcrEngine {
     try {
       console.log(`📷 Processing document OCR scan: ${filePath}`);
 
-      // 1. TRY GEMINI MULTIMODAL VISION LLM IF VALID API KEY IS AVAILABLE
+      // 1. TRY GEMINI MULTIMODAL VISION LLM IF API KEY IS AVAILABLE
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
       if (apiKey && isValidGeminiApiKey(apiKey) && filePath && fs.existsSync(filePath)) {
         try {
-          console.log('🤖 Invoking Gemini Multimodal Vision AI for handwritten document extraction...');
+          console.log('🤖 Invoking Gemini Multimodal Vision AI for document extraction...');
           const aiResult = await this.scanWithGeminiVision(filePath, apiKey);
           if (aiResult && aiResult.items && aiResult.items.length > 0) {
             console.log(`✨ Gemini Vision successfully extracted ${aiResult.items.length} items from document!`);
@@ -95,12 +95,11 @@ export class OcrEngine {
   }
 
   /**
-   * Gemini Multimodal Vision OCR extraction
+   * Gemini Multimodal Vision OCR extraction (Dual Strategy: REST + SDK)
    */
   static async scanWithGeminiVision(filePath, apiKey) {
     if (!isValidGeminiApiKey(apiKey)) return null;
 
-    const ai = new GoogleGenAI({ apiKey });
     const isPdf = filePath.toLowerCase().endsWith('.pdf');
 
     let base64Image = '';
@@ -142,31 +141,74 @@ Return ONLY valid JSON:
 }`;
 
     const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-    let response = null;
+    let text = null;
 
+    // STRATEGY 1: Native REST endpoint
     for (const mName of modelsToTry) {
       try {
-        response = await ai.models.generateContent({
-          model: mName,
-          contents: [
-            {
-              inlineData: {
-                mimeType: targetMimeType,
-                data: base64Image,
-              },
-            },
-            prompt,
-          ],
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${mName}:generateContent?key=${apiKey.trim()}`;
+        const restRes = await fetch(restUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: targetMimeType, data: base64Image } }
+                ]
+              }
+            ],
+            generationConfig: {
+              temperature: 0.1,
+              response_mime_type: 'application/json',
+            }
+          })
         });
-        if (response && response.text) break;
+
+        if (restRes.ok) {
+          const resJson = await restRes.json();
+          text = resJson?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) break;
+        }
       } catch (e) {
-        console.warn(`OcrEngine Gemini model ${mName} call failed:`, e.message);
+        console.warn(`OcrEngine Gemini REST ${mName} notice:`, e.message);
       }
     }
 
-    if (!response || !response.text) return null;
+    // STRATEGY 2: SDK fallback
+    if (!text) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+        for (const mName of modelsToTry) {
+          try {
+            const response = await ai.models.generateContent({
+              model: mName,
+              contents: [
+                {
+                  inlineData: {
+                    mimeType: targetMimeType,
+                    data: base64Image,
+                  },
+                },
+                prompt,
+              ],
+            });
+            if (response && response.text) {
+              text = response.text;
+              break;
+            }
+          } catch (e) {
+            console.warn(`OcrEngine Gemini SDK model ${mName} notice:`, e.message);
+          }
+        }
+      } catch (err) {
+        console.warn('GoogleGenAI SDK initialization notice:', err.message);
+      }
+    }
 
-    const text = response.text;
+    if (!text) return null;
+
     const cleanJson = text.replace(/```json/gi, '').replace(/```/g, '').trim();
     const jsonMatch = cleanJson.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
