@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBusiness } from '../context/BusinessContext';
 import { useLocation } from '../context/LocationContext';
 import { useToast } from '../context/ToastContext';
@@ -22,6 +23,10 @@ import {
   Filter,
   Sparkles,
   X,
+  Receipt,
+  Users,
+  ArrowRight,
+  BarChart3,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -41,6 +46,7 @@ import { useQuery } from '@tanstack/react-query';
 import { PageSkeletonLoader } from '../components/common/SkeletonLoader';
 
 export const ReportsPage = () => {
+  const navigate = useNavigate();
   const { activeBusinessId, activeBusiness } = useBusiness();
   const { activeLocationId, activeLocation, locations, selectLocation } = useLocation();
   const { addToast } = useToast();
@@ -151,6 +157,49 @@ export const ReportsPage = () => {
 
   return (
     <div className="p-2.5 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 max-w-7xl mx-auto pb-24 lg:pb-8">
+      {/* ========================================================================= */}
+      {/* 0. PORTAL SWITCHER & PER-BILL / PER-CUSTOMER P&L HIGHLIGHT */}
+      {/* ========================================================================= */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        {/* Navigation Toggle */}
+        <div className="flex items-center gap-1.5 p-1 bg-zinc-100 rounded-xl border border-zinc-200/80 w-fit">
+          <button
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 shadow-xs flex items-center gap-2"
+          >
+            <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
+            <span>Store Analytics</span>
+          </button>
+          <button
+            onClick={() => navigate('/pnl')}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-white/60 transition-colors flex items-center gap-2 cursor-pointer"
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+            <span>👑 Profit & Loss (P&L)</span>
+            <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hidden sm:inline">
+              Per-Bill & Customer
+            </span>
+          </button>
+        </div>
+
+        {/* Quick jump to bills/customers */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <button
+            onClick={() => navigate('/pnl?tab=bills')}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            <Receipt className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Per-Bill P&L Ledger</span>
+          </button>
+          <button
+            onClick={() => navigate('/pnl?tab=customers')}
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+          >
+            <Users className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Per-Customer P&L</span>
+          </button>
+        </div>
+      </div>
+
       {/* ========================================================================= */}
       {/* 1. TOP HEADER & CONTROLS TOOLBAR */}
       {/* ========================================================================= */}

@@ -25,6 +25,7 @@ import {
   AlertCircle,
   Truck,
   Upload,
+  BarChart3,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -274,7 +275,7 @@ const GodownDashboard = ({ data, activeBusiness, activeLocation, locations, sele
       </div>
 
       {/* GODOWN QUICK TOOLS */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <button onClick={() => navigate('/orders')} className="bird-card p-3 sm:p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><ShoppingBag className="w-4 h-4" /></div>
           <div><span className="text-xs font-bold text-zinc-900 block">Purchase Orders</span><span className="text-[10px] text-zinc-400 font-medium">Procurement</span></div>
@@ -283,9 +284,17 @@ const GodownDashboard = ({ data, activeBusiness, activeLocation, locations, sele
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><FileSpreadsheet className="w-4 h-4" /></div>
           <div><span className="text-xs font-bold text-zinc-900 block">Excel Import</span><span className="text-[10px] text-zinc-400 font-medium">Catalog bulk</span></div>
         </button>
-        <button onClick={() => navigate('/suppliers')} className="bird-card p-3 sm:p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left col-span-2 sm:col-span-1">
+        <button onClick={() => navigate('/suppliers')} className="bird-card p-3 sm:p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left">
           <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0"><Truck className="w-4 h-4" /></div>
           <div><span className="text-xs font-bold text-zinc-900 block">Suppliers</span><span className="text-[10px] text-zinc-400 font-medium">Khata balances</span></div>
+        </button>
+        <button onClick={() => navigate('/pnl')} className="bird-card p-3 sm:p-3.5 bg-white border border-emerald-200 hover:border-emerald-600 flex items-center gap-3 transition-all text-left">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4" /></div>
+          <div><span className="text-xs font-bold text-emerald-950 block">P&L Portal</span><span className="text-[10px] text-emerald-600 font-medium">Per-Bill & Customer</span></div>
+        </button>
+        <button onClick={() => navigate('/reports')} className="bird-card p-3 sm:p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left col-span-2 sm:col-span-1">
+          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><BarChart3 className="w-4 h-4" /></div>
+          <div><span className="text-xs font-bold text-zinc-900 block">Analytics</span><span className="text-[10px] text-zinc-400 font-medium">Store reports</span></div>
         </button>
       </div>
     </div>
@@ -632,22 +641,26 @@ const StoreDashboard = ({ data, activeBusiness, activeLocation, locations, selec
       </div>
 
       {/* QUICK OPERATIONS TOOLBAR */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <button onClick={() => navigate('/scan-bill')} className="bird-card p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left">
           <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0"><Camera className="w-4 h-4" /></div>
           <div><span className="text-xs font-bold text-zinc-900 block">Scan Paper Bill</span><span className="text-[10px] text-zinc-400 font-medium">AI OCR Extraction</span></div>
         </button>
         <button onClick={() => navigate('/import')} className="bird-card p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left">
           <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0"><FileSpreadsheet className="w-4 h-4" /></div>
-          <div><span className="text-xs font-bold text-zinc-900 block">Excel Import / Export</span><span className="text-[10px] text-zinc-400 font-medium">Bulk Product Catalog</span></div>
+          <div><span className="text-xs font-bold text-zinc-900 block">Excel Import</span><span className="text-[10px] text-zinc-400 font-medium">Bulk Catalog</span></div>
         </button>
         <button onClick={() => navigate('/money')} className="bird-card p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left">
           <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><CreditCard className="w-4 h-4" /></div>
-          <div><span className="text-xs font-bold text-zinc-900 block">Money & Cashbook</span><span className="text-[10px] text-zinc-400 font-medium">Cash, Bank & UPI</span></div>
+          <div><span className="text-xs font-bold text-zinc-900 block">Money & Cash</span><span className="text-[10px] text-zinc-400 font-medium">Cash, Bank & UPI</span></div>
         </button>
-        <button onClick={() => navigate('/reports')} className="bird-card p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left">
-          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4" /></div>
-          <div><span className="text-xs font-bold text-zinc-900 block">Business Analytics</span><span className="text-[10px] text-zinc-400 font-medium">Profit & Loss Reports</span></div>
+        <button onClick={() => navigate('/pnl')} className="bird-card p-3.5 bg-white border border-emerald-200 hover:border-emerald-600 flex items-center gap-3 transition-all text-left">
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0"><TrendingUp className="w-4 h-4" /></div>
+          <div><span className="text-xs font-bold text-emerald-950 block">P&L Portal</span><span className="text-[10px] text-emerald-600 font-medium">Per-Bill & Customer</span></div>
+        </button>
+        <button onClick={() => navigate('/reports')} className="bird-card p-3.5 bg-white border border-zinc-200 hover:border-zinc-900 flex items-center gap-3 transition-all text-left col-span-2 sm:col-span-1">
+          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><BarChart3 className="w-4 h-4" /></div>
+          <div><span className="text-xs font-bold text-zinc-900 block">Store Analytics</span><span className="text-[10px] text-zinc-400 font-medium">Sales Growth & Stocks</span></div>
         </button>
       </div>
 

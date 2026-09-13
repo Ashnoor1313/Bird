@@ -8,6 +8,7 @@ import {
   Receipt,
   ArrowDownLeft,
   ArrowUpRight,
+  TrendingUp,
   X,
 } from 'lucide-react';
 import { useLocation } from '../../context/LocationContext';
@@ -26,11 +27,13 @@ export const QuickActionModal = ({ isOpen, onClose, onActionSelect }) => {
         { id: 'batteries', label: 'Batteries Stock', desc: 'Add or adjust battery models', icon: BatteryCharging, path: '/batteries' },
         { id: 'scan-bill', label: 'Photo / Bill OCR', desc: 'Snap photo of bill or handwritten slip', icon: Camera, path: '/scan-bill' },
         { id: 'import-excel', label: 'Import Excel', desc: 'Upload stock spreadsheet (.xlsx, .csv)', icon: FileSpreadsheet, path: '/import' },
+        { id: 'pnl', label: 'Profit & Loss (P&L)', desc: 'Per-bill, customer margins & ledger', icon: TrendingUp, path: '/pnl' },
       ]
     : [
         { id: 'make-bill', label: 'Create Sale Bill', desc: 'Fast mobile customer sale', icon: Receipt, path: '/sales?action=new' },
         { id: 'receive-money', label: 'Receive Money', desc: 'Record payment from customer', icon: ArrowDownLeft, path: '/money?action=receive' },
         { id: 'pay-money', label: 'Pay Money', desc: 'Pay supplier or log expense', icon: ArrowUpRight, path: '/money?action=pay' },
+        { id: 'pnl', label: 'Profit & Loss (P&L)', desc: 'Per-bill, customer margins & ledger', icon: TrendingUp, path: '/pnl' },
         { id: 'folders', label: 'Store Folders', desc: 'View store folder stock', icon: Smartphone, path: '/folders' },
         { id: 'batteries', label: 'Store Batteries', desc: 'View store battery stock', icon: BatteryCharging, path: '/batteries' },
       ];

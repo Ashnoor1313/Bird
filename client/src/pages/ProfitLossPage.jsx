@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useBusiness } from '../context/BusinessContext';
 import { useLocation } from '../context/LocationContext';
 import { useAuth } from '../context/AuthContext';
@@ -26,7 +27,10 @@ import {
   SlidersHorizontal,
   PieChart as PieIcon,
   BarChart2,
+  BarChart3,
   Table as TableIcon,
+  ArrowLeft,
+  Lock,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -45,9 +49,11 @@ import {
 import { useDebounce } from '../hooks/useDebounce';
 
 export const ProfitLossPage = () => {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeBusinessId, activeBusiness } = useBusiness();
   const { locations, activeLocationId, selectLocation } = useLocation();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, setAdminModalOpen } = useAuth();
   const { addToast } = useToast();
 
   // Active Filters
@@ -56,7 +62,26 @@ export const ProfitLossPage = () => {
   const [selectedHalfYear, setSelectedHalfYear] = useState('half-yearly'); // 'half-yearly' | 'h1' | 'h2'
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  const [activeTab, setActiveTab] = useState('statement'); // 'statement' | 'bills' | 'customers' | 'products' | 'comparison'
+  
+  const initialTab = searchParams.get('tab');
+  const validTabs = ['statement', 'bills', 'customers', 'products', 'comparison'];
+  const [activeTab, setActiveTab] = useState(validTabs.includes(initialTab) ? initialTab : 'statement');
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && validTabs.includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tabId);
+      return next;
+    }, { replace: true });
+  };
 
   // Data states
   const [summaryData, setSummaryData] = useState(null);
@@ -223,15 +248,34 @@ export const ProfitLossPage = () => {
   if (!isAdmin) {
     return (
       <div className="p-6 max-w-2xl mx-auto my-12 bird-card text-center space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
-          <ShieldAlert className="w-6 h-6" />
+        <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+          <ShieldAlert className="w-7 h-7" />
         </div>
-        <h2 className="text-lg font-bold text-zinc-900">Access Restricted to Admin / Owner</h2>
-        <p className="text-xs text-zinc-500 max-w-md mx-auto">
-          Financial Profit & Loss reports, purchase costs, and store margins are protected and accessible only by Business Owners & Administrators.
+        <h2 className="text-xl font-bold text-zinc-900">Access Restricted to Admin / Owner</h2>
+        <p className="text-xs sm:text-sm text-zinc-500 max-w-md mx-auto">
+          Financial Profit & Loss reports, purchase costs, per-bill margins, and customer profitability are protected and accessible only by Business Owners & Administrators.
         </p>
-        <div className="pt-2 text-xs font-semibold text-zinc-400">
-          Current Logged-in Role: <span className="text-zinc-700 font-bold">{user?.role}</span>
+        <div className="pt-1 text-xs font-semibold text-zinc-400">
+          Current Logged-in Role: <span className="text-zinc-700 font-bold">{user?.role || 'EMPLOYEE'}</span>
+        </div>
+
+        <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setAdminModalOpen(true)}
+            className="btn-primary text-xs py-2.5 px-5 font-bold flex items-center justify-center gap-2 cursor-pointer w-full sm:w-auto shadow-sm"
+          >
+            <Lock className="w-4 h-4 text-amber-300" />
+            <span>Unlock Admin Mode with Password</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/reports')}
+            className="btn-secondary text-xs py-2.5 px-4 font-semibold flex items-center justify-center gap-1.5 cursor-pointer w-full sm:w-auto"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-zinc-500" />
+            <span>View Store Analytics</span>
+          </button>
         </div>
       </div>
     );
@@ -247,6 +291,26 @@ export const ProfitLossPage = () => {
 
   return (
     <div className="p-3 sm:p-6 space-y-5 max-w-7xl mx-auto pb-28 lg:pb-12 print:p-0">
+      {/* 0. PORTAL NAVIGATION SWITCHER: Analytics vs P&L */}
+      <div className="flex items-center gap-1.5 p-1 bg-zinc-100 rounded-xl border border-zinc-200/80 w-fit">
+        <button
+          onClick={() => navigate('/reports')}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-white/60 transition-colors flex items-center gap-2 cursor-pointer"
+        >
+          <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
+          <span>Store Analytics</span>
+        </button>
+        <button
+          className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 shadow-xs flex items-center gap-2"
+        >
+          <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+          <span>👑 Profit & Loss (P&L)</span>
+          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hidden sm:inline">
+            Per-Bill & Customer
+          </span>
+        </button>
+      </div>
+
       {/* Top Header Card */}
       <div className="bird-card p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -513,8 +577,8 @@ export const ProfitLossPage = () => {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 shrink-0 ${
+              onClick={() => handleTabChange(tab.id)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 shrink-0 cursor-pointer ${
                 activeTab === tab.id
                   ? 'bg-zinc-900 text-white shadow-xs'
                   : 'bg-white border border-zinc-200/80 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50'
@@ -739,7 +803,75 @@ export const ProfitLossPage = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* MOBILE VIEW: Per-Bill Cards */}
+          <div className="block md:hidden space-y-3">
+            {billsData.length === 0 ? (
+              <div className="text-center py-8 text-xs text-zinc-400 font-medium">No bills found for the selected period.</div>
+            ) : (
+              billsData.map((b) => (
+                <div
+                  key={b.id}
+                  className="p-3.5 bg-zinc-50/80 rounded-xl border border-zinc-200 space-y-2.5 shadow-2xs"
+                >
+                  {/* Top Row: Bill No & Margin */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-xs text-zinc-900">#{b.billNo}</span>
+                      <span className="text-[10px] text-zinc-400 font-medium">
+                        {new Date(b.saleDate).toLocaleDateString('en-IN')}
+                      </span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full font-black text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      {b.profitMargin}% Margin
+                    </span>
+                  </div>
+
+                  {/* Customer & Branch */}
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-zinc-800">{b.customerName}</span>
+                      {b.customerPhone && (
+                        <span className="text-[10px] text-zinc-400 font-medium ml-1.5">
+                          ({b.customerPhone})
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] text-zinc-500 font-semibold bg-white px-2 py-0.5 rounded border border-zinc-200">
+                      {b.locationName}
+                    </span>
+                  </div>
+
+                  {/* Financial Metrics Strip: Revenue, COGS, Profit */}
+                  <div className="grid grid-cols-3 gap-2 p-2.5 bg-white rounded-lg border border-zinc-200/80 text-center">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-medium block">Revenue</span>
+                      <span className="text-xs font-bold text-zinc-900 tabular-nums">₹{b.total.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-medium block">Cost (COGS)</span>
+                      <span className="text-xs font-medium text-zinc-600 tabular-nums">₹{b.cogs.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-emerald-700 font-bold block">Gross Profit</span>
+                      <span className="text-xs font-black text-emerald-700 tabular-nums">+₹{b.grossProfit.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  {/* Action button */}
+                  <button
+                    onClick={() => setSelectedBillForModal(b)}
+                    className="w-full py-2 px-3 rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-zinc-600" />
+                    <span>View Line Items & Purchase Costs</span>
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* DESKTOP VIEW: Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-zinc-200 text-zinc-400 font-semibold">
@@ -822,7 +954,69 @@ export const ProfitLossPage = () => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {/* MOBILE VIEW: Per-Customer Cards */}
+          <div className="block md:hidden space-y-3">
+            {filteredCustomers.length === 0 ? (
+              <div className="text-center py-8 text-xs text-zinc-400 font-medium">No customers found.</div>
+            ) : (
+              filteredCustomers.map((c, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 bg-zinc-50/80 rounded-xl border border-zinc-200 space-y-2.5 shadow-2xs"
+                >
+                  {/* Top: Rank, Name & Margin */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-zinc-900 text-white text-[10px] font-black flex items-center justify-center shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <div>
+                        <div className="font-extrabold text-xs text-zinc-900">{c.customerName}</div>
+                        <div className="text-[10px] text-zinc-400 font-medium">
+                          {c.customerPhone || 'Walk-in'} • {c.locationName}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full font-black text-[11px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      {c.profitMargin}% Margin
+                    </span>
+                  </div>
+
+                  {/* Metrics Strip */}
+                  <div className="grid grid-cols-3 gap-2 p-2.5 bg-white rounded-lg border border-zinc-200/80 text-center">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-medium block">Total Revenue</span>
+                      <span className="text-xs font-bold text-zinc-900 tabular-nums">₹{c.totalRevenue.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 font-medium block">Total Cost</span>
+                      <span className="text-xs font-medium text-zinc-600 tabular-nums">₹{c.totalCOGS.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-emerald-700 font-bold block">Profit Earned</span>
+                      <span className="text-xs font-black text-emerald-700 tabular-nums">₹{c.grossProfit.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  {/* Footer: Bills & Khata Due */}
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-200/60">
+                    <span className="text-[11px] text-zinc-500 font-medium">
+                      Bills: <strong className="text-zinc-800">{c.billsCount}</strong>
+                    </span>
+                    <div className="text-[11px]">
+                      <span className="text-zinc-400 font-medium">Khata Due: </span>
+                      <span className={`font-extrabold tabular-nums ${(c.moneyToReceive || 0) > 0 ? 'text-amber-700' : 'text-zinc-600'}`}>
+                        ₹{(c.moneyToReceive || 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* DESKTOP VIEW: Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-zinc-200 text-zinc-400 font-semibold">
@@ -900,7 +1094,39 @@ export const ProfitLossPage = () => {
               <p className="text-zinc-500 text-xs font-medium">Product-by-product profitability</p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* MOBILE VIEW FOR PRODUCTS */}
+            <div className="block md:hidden space-y-2.5">
+              {productsData.products?.slice(0, 30).map((p, idx) => (
+                <div key={idx} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-xs text-zinc-900">{p.name}</div>
+                      <div className="text-[10px] text-zinc-500 font-medium">{p.category} • {p.quantitySold} pcs sold</div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full font-extrabold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+                      {p.margin}% Margin
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 p-2 bg-white rounded-lg border border-zinc-200/60 text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-zinc-400 block">Revenue</span>
+                      <span className="font-bold text-zinc-900 tabular-nums">₹{p.revenue.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-400 block">Cost</span>
+                      <span className="font-medium text-zinc-600 tabular-nums">₹{p.cogs.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-emerald-700 font-bold block">Profit</span>
+                      <span className="font-black text-emerald-700 tabular-nums">₹{p.grossProfit.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* DESKTOP VIEW FOR PRODUCTS */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-zinc-200 text-zinc-400 font-semibold">
@@ -942,7 +1168,36 @@ export const ProfitLossPage = () => {
               <p className="text-zinc-500 text-xs font-medium">Performance broken down across financial quarters</p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* MOBILE VIEW FOR QUARTERLY */}
+            <div className="block md:hidden space-y-2.5">
+              {summaryData?.quarterlyBreakdown?.map((q, idx) => (
+                <div key={idx} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-zinc-900">{q.quarter}</span>
+                    <span className="px-2 py-0.5 rounded-full font-extrabold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      {q.margin}% Margin
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 p-2 bg-white rounded-lg border border-zinc-200/60 text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-zinc-400 block">Revenue</span>
+                      <span className="font-bold text-zinc-900 tabular-nums">₹{q.revenue.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-400 block">COGS</span>
+                      <span className="font-medium text-zinc-600 tabular-nums">₹{q.cogs.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-emerald-700 font-bold block">Net Profit</span>
+                      <span className="font-black text-emerald-700 tabular-nums">₹{q.netProfit.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* DESKTOP VIEW FOR QUARTERLY */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-zinc-200 text-zinc-400 font-semibold">
@@ -979,7 +1234,36 @@ export const ProfitLossPage = () => {
               <p className="text-zinc-500 text-xs font-medium">6-month consolidated performance</p>
             </div>
 
-            <div className="overflow-x-auto">
+            {/* MOBILE VIEW FOR HALF-YEARLY */}
+            <div className="block md:hidden space-y-2.5">
+              {summaryData?.halfYearlyBreakdown?.map((h, idx) => (
+                <div key={idx} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-xs text-zinc-900">{h.halfYear}</span>
+                    <span className="px-2 py-0.5 rounded-full font-extrabold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      {h.margin}% Margin
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 p-2 bg-white rounded-lg border border-zinc-200/60 text-center text-xs">
+                    <div>
+                      <span className="text-[9px] text-zinc-400 block">Revenue</span>
+                      <span className="font-bold text-zinc-900 tabular-nums">₹{h.revenue.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-zinc-400 block">COGS</span>
+                      <span className="font-medium text-zinc-600 tabular-nums">₹{h.cogs.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-emerald-700 font-bold block">Net Profit</span>
+                      <span className="font-black text-emerald-700 tabular-nums">₹{h.netProfit.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* DESKTOP VIEW FOR HALF-YEARLY */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-zinc-200 text-zinc-400 font-semibold">
@@ -1048,8 +1332,45 @@ export const ProfitLossPage = () => {
               </div>
             </div>
 
-            {/* Items Table with Selling Rate vs Purchase Cost */}
-            <div className="overflow-x-auto">
+            {/* MOBILE VIEW: Line Items Cards */}
+            <div className="block md:hidden space-y-2.5">
+              {selectedBillForModal.items?.map((item, idx) => (
+                <div key={idx} className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-xs text-zinc-900">{item.productName}</div>
+                      {(item.model || item.quality) && (
+                        <div className="text-[10px] text-zinc-400 font-medium">
+                          {item.model} • {item.quality}
+                        </div>
+                      )}
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full font-extrabold text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+                      {item.lineMargin}% Margin
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-white p-2 rounded-lg border border-zinc-200/80">
+                    <div>
+                      <span className="text-[10px] text-zinc-400 block">Selling Rate × Qty</span>
+                      <span className="font-bold text-zinc-900">₹{item.unitPrice} × {item.quantity} = ₹{item.lineTotal.toLocaleString('en-IN')}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-400 block">Purchase Cost</span>
+                      <span className="font-medium text-zinc-600">₹{item.purchasePrice} × {item.quantity} = ₹{item.lineCost.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-zinc-200/50">
+                    <span className="font-bold text-emerald-800">Net Line Profit:</span>
+                    <span className="font-black text-emerald-700 tabular-nums">+₹{item.lineProfit.toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* DESKTOP VIEW: Table */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-zinc-200 text-zinc-400 font-semibold">
