@@ -290,30 +290,30 @@ export const ProfitLossPage = () => {
   });
 
   return (
-    <div className="p-3 sm:p-6 space-y-5 max-w-7xl mx-auto pb-28 lg:pb-12 print:p-0">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-5 max-w-7xl mx-auto pb-28 lg:pb-12 print:p-0">
       {/* 0. PORTAL NAVIGATION SWITCHER: Analytics vs P&L */}
-      <div className="flex items-center gap-1.5 p-1 bg-zinc-100 rounded-xl border border-zinc-200/80 w-fit">
+      <div className="flex items-center gap-1.5 p-1 bg-zinc-100 rounded-xl border border-zinc-200/80 w-full sm:w-fit">
         <button
           onClick={() => navigate('/reports')}
-          className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-white/60 transition-colors flex items-center gap-2 cursor-pointer"
+          className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-600 hover:text-zinc-950 hover:bg-white/60 transition-colors flex items-center justify-center gap-2 cursor-pointer"
         >
-          <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
+          <BarChart3 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
           <span>Store Analytics</span>
         </button>
         <button
-          className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 shadow-xs flex items-center gap-2"
+          className="flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold bg-white text-zinc-950 shadow-xs flex items-center justify-center gap-2"
         >
-          <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+          <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
           <span>👑 Profit & Loss (P&L)</span>
-          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hidden sm:inline">
+          <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 hidden md:inline">
             Per-Bill & Customer
           </span>
         </button>
       </div>
 
-      {/* Top Header Card */}
-      <div className="bird-card p-5 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* 1. Top Header Card */}
+      <div className="bird-card p-4 sm:p-5 space-y-3 sm:space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-[11px] font-semibold text-zinc-400">
               <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
@@ -322,27 +322,27 @@ export const ProfitLossPage = () => {
               <span>•</span>
               <span className="text-zinc-700 font-bold">{activeBusiness?.name}</span>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-zinc-900 mt-1 flex items-center gap-2">
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 mt-0.5 sm:mt-1 flex items-center gap-2">
               <span>Profit & Loss (P&L) Accounting</span>
             </h1>
-            <p className="text-xs text-zinc-500 font-medium">
+            <p className="text-xs text-zinc-500 font-medium hidden sm:block">
               Comprehensive real-time profitability across individual bills, customers, weeks, months, quarters, and half-years.
             </p>
           </div>
 
           {/* Action buttons & Print */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button onClick={fetchPnlSummary} className="btn-secondary" title="Refresh">
+          <div className="flex items-center gap-2 self-end sm:self-auto w-full sm:w-auto justify-end">
+            <button onClick={fetchPnlSummary} className="btn-secondary px-2.5 py-1.5" title="Refresh">
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
 
-            <button onClick={handleExportExcel} disabled={exporting} className="btn-secondary">
+            <button onClick={handleExportExcel} disabled={exporting} className="btn-secondary px-3 py-1.5 text-xs">
               {exporting ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5 text-zinc-600" />}
               <span>Export P&L Excel</span>
             </button>
 
-            <button onClick={handlePrintStatement} className="btn-secondary">
+            <button onClick={handlePrintStatement} className="btn-secondary px-3 py-1.5 text-xs hidden sm:inline-flex">
               <Printer className="w-3.5 h-3.5 text-zinc-600" />
               <span>Print Statement</span>
             </button>
@@ -350,9 +350,9 @@ export const ProfitLossPage = () => {
         </div>
 
         {/* Filters Bar: Period Selector + Branch Filter */}
-        <div className="pt-3 border-t border-zinc-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="pt-2.5 border-t border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {/* Main Period Selector Tabs */}
-          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar pb-1">
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
             {[
               { id: 'today', label: 'Today' },
               { id: 'weekly', label: 'Weekly' },
@@ -366,7 +366,7 @@ export const ProfitLossPage = () => {
               <button
                 key={p.id}
                 onClick={() => setPeriod(p.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors shrink-0 ${
                   period === p.id
                     ? 'bg-zinc-900 text-white shadow-2xs'
                     : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
@@ -378,13 +378,13 @@ export const ProfitLossPage = () => {
           </div>
 
           {/* Location / Branch Filter */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
-            <span className="text-xs font-medium text-zinc-400 flex items-center gap-1 mr-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 shrink-0">
+            <span className="text-xs font-medium text-zinc-400 flex items-center gap-1 mr-1 shrink-0">
               <Building2 className="w-3.5 h-3.5" /> Branch:
             </span>
             <button
               onClick={() => selectLocation('ALL')}
-              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+              className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors shrink-0 ${
                 activeLocationId === 'ALL'
                   ? 'bg-zinc-900 text-white shadow-2xs'
                   : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
@@ -396,7 +396,7 @@ export const ProfitLossPage = () => {
               <button
                 key={loc.id}
                 onClick={() => selectLocation(loc.id)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors shrink-0 ${
                   activeLocationId === loc.id
                     ? 'bg-zinc-900 text-white shadow-2xs'
                     : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
@@ -410,8 +410,8 @@ export const ProfitLossPage = () => {
 
         {/* Sub-period selectors (for Quarterly, Half-Yearly, Custom) */}
         {period === 'quarterly' && (
-          <div className="pt-2 flex items-center gap-2 text-xs font-semibold">
-            <span className="text-zinc-400">Select Quarter:</span>
+          <div className="pt-2 flex items-center gap-2 text-xs font-semibold overflow-x-auto no-scrollbar py-0.5">
+            <span className="text-zinc-400 shrink-0">Select Quarter:</span>
             {[
               { id: 'quarterly', label: 'Current Quarter' },
               { id: 'q1', label: 'Q1 (Jan - Mar)' },
@@ -422,7 +422,7 @@ export const ProfitLossPage = () => {
               <button
                 key={q.id}
                 onClick={() => setSelectedQuarter(q.id)}
-                className={`px-2.5 py-1 rounded-md border transition-colors ${
+                className={`px-2.5 py-1 rounded-md border transition-colors shrink-0 ${
                   selectedQuarter === q.id
                     ? 'border-zinc-900 bg-zinc-900 text-white'
                     : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
@@ -435,8 +435,8 @@ export const ProfitLossPage = () => {
         )}
 
         {period === 'half-yearly' && (
-          <div className="pt-2 flex items-center gap-2 text-xs font-semibold">
-            <span className="text-zinc-400">Select Half-Year:</span>
+          <div className="pt-2 flex items-center gap-2 text-xs font-semibold overflow-x-auto no-scrollbar py-0.5">
+            <span className="text-zinc-400 shrink-0">Select Half-Year:</span>
             {[
               { id: 'half-yearly', label: 'Current Half-Year' },
               { id: 'h1', label: 'H1 (Jan - Jun)' },
@@ -445,7 +445,7 @@ export const ProfitLossPage = () => {
               <button
                 key={h.id}
                 onClick={() => setSelectedHalfYear(h.id)}
-                className={`px-2.5 py-1 rounded-md border transition-colors ${
+                className={`px-2.5 py-1 rounded-md border transition-colors shrink-0 ${
                   selectedHalfYear === h.id
                     ? 'border-zinc-900 bg-zinc-900 text-white'
                     : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
@@ -479,7 +479,7 @@ export const ProfitLossPage = () => {
             </div>
             <button
               onClick={fetchPnlSummary}
-              className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-bold text-xs"
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 text-white font-bold text-xs cursor-pointer"
             >
               Apply Filter
             </button>
@@ -487,90 +487,13 @@ export const ProfitLossPage = () => {
         )}
       </div>
 
-      {/* Primary KPI Metrics Bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-        {/* 1. Gross Sales Revenue */}
-        <div className="bird-card p-4">
-          <div className="flex items-center justify-between text-zinc-500 text-xs font-medium mb-1">
-            <span>Sales Revenue</span>
-            <TrendingUp className="w-4 h-4 text-zinc-600" />
-          </div>
-          <div className="text-2xl font-bold text-zinc-900 tabular-nums">
-            ₹{(summaryData?.totalNetSales || 0).toLocaleString('en-IN')}
-          </div>
-          <div className="text-[11px] text-zinc-400 font-medium mt-1">
-            {summaryData?.invoicesCount || 0} bills • {summaryData?.itemsSoldCount || 0} pcs
-          </div>
-        </div>
-
-        {/* 2. Cost of Goods Sold (COGS) */}
-        <div className="bird-card p-4">
-          <div className="flex items-center justify-between text-zinc-500 text-xs font-medium mb-1">
-            <span>Cost of Goods (COGS)</span>
-            <Boxes className="w-4 h-4 text-zinc-500" />
-          </div>
-          <div className="text-2xl font-bold text-zinc-700 tabular-nums">
-            ₹{(summaryData?.totalCOGS || 0).toLocaleString('en-IN')}
-          </div>
-          <div className="text-[11px] text-zinc-400 font-medium mt-1">
-            Product procurement cost
-          </div>
-        </div>
-
-        {/* 3. Gross Profit & Margin */}
-        <div className="bird-card p-4 bg-emerald-50/40 border-emerald-200/80">
-          <div className="flex items-center justify-between text-emerald-800 text-xs font-bold mb-1">
-            <span>Gross Profit</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold">
-              {summaryData?.grossMarginPercent || 0}% Margin
-            </span>
-          </div>
-          <div className="text-2xl font-black text-emerald-950 tabular-nums">
-            ₹{(summaryData?.grossProfit || 0).toLocaleString('en-IN')}
-          </div>
-          <div className="text-[11px] text-emerald-700 font-medium mt-1">
-            Revenue minus Purchase Costs
-          </div>
-        </div>
-
-        {/* 4. Operating Expenses */}
-        <div className="bird-card p-4">
-          <div className="flex items-center justify-between text-zinc-500 text-xs font-medium mb-1">
-            <span>Operating Expenses</span>
-            <DollarSign className="w-4 h-4 text-amber-600" />
-          </div>
-          <div className="text-2xl font-bold text-zinc-900 tabular-nums">
-            ₹{(summaryData?.totalOperatingExpenses || 0).toLocaleString('en-IN')}
-          </div>
-          <div className="text-[11px] text-zinc-400 font-medium mt-1">
-            Rent, salary, electricity, office
-          </div>
-        </div>
-
-        {/* 5. Net Profit (Bottomline) */}
-        <div className="bird-card p-4 bg-zinc-900 text-white shadow-md">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
-            <span>Net Operating Profit</span>
-            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-extrabold">
-              {summaryData?.netProfitMarginPercent || 0}% Net
-            </span>
-          </div>
-          <div className="text-2xl font-black text-white tabular-nums">
-            ₹{(summaryData?.netProfit || 0).toLocaleString('en-IN')}
-          </div>
-          <div className="text-[11px] text-zinc-400 font-medium mt-1">
-            {summaryData?.periodLabel || 'Active Period'}
-          </div>
-        </div>
-      </div>
-
-      {/* Main View Tabs Navigation */}
-      <div className="flex items-center gap-1.5 border-b border-zinc-200 pb-2 overflow-x-auto no-scrollbar">
+      {/* 2. MAIN VIEW TABS NAVIGATION (PROMINENT AT TOP SO USERS NEVER MISS PER-BILL & PER-CUSTOMER) */}
+      <div className="flex items-center gap-1.5 border-b border-zinc-200 pb-2 overflow-x-auto no-scrollbar -mx-3 px-3 sm:mx-0 sm:px-0">
         {[
           { id: 'statement', label: 'Financial Statement & Trends', icon: BarChart2 },
           { id: 'bills', label: `Per-Bill P&L (${billsData.length || summaryData?.invoicesCount || 0})`, icon: Receipt },
           { id: 'customers', label: `Per-Customer P&L (${customersData.length || 0})`, icon: Users },
-          { id: 'products', label: 'Categories & Products Profitability', icon: Layers },
+          { id: 'products', label: 'Categories & Products', icon: Layers },
           { id: 'comparison', label: 'Quarterly & Half-Yearly Breakdown', icon: TableIcon },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -578,13 +501,13 @@ export const ProfitLossPage = () => {
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 shrink-0 cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer ${
                 activeTab === tab.id
                   ? 'bg-zinc-900 text-white shadow-xs'
                   : 'bg-white border border-zinc-200/80 text-zinc-600 hover:text-zinc-900 hover:bg-zinc-50'
               }`}
             >
-              <Icon className="w-3.5 h-3.5" />
+              <Icon className="w-3.5 h-3.5 shrink-0" />
               <span>{tab.label}</span>
             </button>
           );
@@ -593,7 +516,83 @@ export const ProfitLossPage = () => {
 
       {/* TAB 1: FINANCIAL STATEMENT & CHARTS */}
       {activeTab === 'statement' && (
-        <div className="space-y-5">
+        <div className="space-y-4 sm:space-y-5">
+          {/* Primary KPI Metrics Bar (2-col grid on mobile, 5-col on desktop) */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
+            {/* 1. Gross Sales Revenue */}
+            <div className="bird-card p-3 sm:p-4">
+              <div className="flex items-center justify-between text-zinc-500 text-xs font-medium mb-1">
+                <span>Sales Revenue</span>
+                <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-600" />
+              </div>
+              <div className="text-lg sm:text-2xl font-bold text-zinc-900 tabular-nums">
+                ₹{(summaryData?.totalNetSales || 0).toLocaleString('en-IN')}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-zinc-400 font-medium mt-1">
+                {summaryData?.invoicesCount || 0} bills • {summaryData?.itemsSoldCount || 0} pcs
+              </div>
+            </div>
+
+            {/* 2. Cost of Goods Sold (COGS) */}
+            <div className="bird-card p-3 sm:p-4">
+              <div className="flex items-center justify-between text-zinc-500 text-xs font-medium mb-1">
+                <span>Cost of Goods</span>
+                <Boxes className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-500" />
+              </div>
+              <div className="text-lg sm:text-2xl font-bold text-zinc-700 tabular-nums">
+                ₹{(summaryData?.totalCOGS || 0).toLocaleString('en-IN')}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-zinc-400 font-medium mt-1">
+                Procurement cost
+              </div>
+            </div>
+
+            {/* 3. Gross Profit & Margin */}
+            <div className="bird-card p-3 sm:p-4 bg-emerald-50/40 border-emerald-200/80">
+              <div className="flex items-center justify-between text-emerald-800 text-xs font-bold mb-1">
+                <span>Gross Profit</span>
+                <span className="text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-extrabold">
+                  {summaryData?.grossMarginPercent || 0}%
+                </span>
+              </div>
+              <div className="text-lg sm:text-2xl font-black text-emerald-950 tabular-nums">
+                ₹{(summaryData?.grossProfit || 0).toLocaleString('en-IN')}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-emerald-700 font-medium mt-1">
+                Revenue - Cost
+              </div>
+            </div>
+
+            {/* 4. Operating Expenses */}
+            <div className="bird-card p-3 sm:p-4">
+              <div className="flex items-center justify-between text-zinc-500 text-xs font-medium mb-1">
+                <span>Operating Exp.</span>
+                <DollarSign className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-600" />
+              </div>
+              <div className="text-lg sm:text-2xl font-bold text-zinc-900 tabular-nums">
+                ₹{(summaryData?.totalOperatingExpenses || 0).toLocaleString('en-IN')}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-zinc-400 font-medium mt-1">
+                Rent, salaries, bills
+              </div>
+            </div>
+
+            {/* 5. Net Profit (Bottomline) */}
+            <div className="bird-card p-3 sm:p-4 bg-zinc-900 text-white shadow-md col-span-2 lg:col-span-1">
+              <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-1">
+                <span>Net Operating Profit</span>
+                <span className="text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-extrabold">
+                  {summaryData?.netProfitMarginPercent || 0}% Net
+                </span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-white tabular-nums">
+                ₹{(summaryData?.netProfit || 0).toLocaleString('en-IN')}
+              </div>
+              <div className="text-[10px] sm:text-[11px] text-zinc-400 font-medium mt-1">
+                {summaryData?.periodLabel || 'Active Period'}
+              </div>
+            </div>
+          </div>
           {/* Main Chart: Revenue vs Cost vs Net Profit */}
           <div className="bird-card p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -774,7 +773,30 @@ export const ProfitLossPage = () => {
 
       {/* TAB 2: PER-BILL PROFIT & LOSS (INVOICE-LEVEL PROFITABILITY) */}
       {activeTab === 'bills' && (
-        <div className="bird-card p-5 space-y-4">
+        <div className="space-y-3 sm:space-y-4">
+          {/* Quick Summary Strip for Bills */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bird-card p-2.5 sm:p-3 text-center">
+              <span className="text-[10px] sm:text-xs text-zinc-400 font-medium block">Total Bills</span>
+              <span className="text-sm sm:text-lg font-bold text-zinc-900 tabular-nums">
+                {billsData.length || summaryData?.invoicesCount || 0}
+              </span>
+            </div>
+            <div className="bird-card p-2.5 sm:p-3 text-center">
+              <span className="text-[10px] sm:text-xs text-zinc-400 font-medium block">Total Revenue</span>
+              <span className="text-sm sm:text-lg font-bold text-zinc-900 tabular-nums">
+                ₹{(summaryData?.totalNetSales || 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="bird-card p-2.5 sm:p-3 text-center bg-emerald-50/50 border-emerald-200">
+              <span className="text-[10px] sm:text-xs text-emerald-700 font-medium block">Gross Margin</span>
+              <span className="text-sm sm:text-lg font-bold text-emerald-800 tabular-nums">
+                {summaryData?.grossMarginPercent || 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bird-card p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-sm text-zinc-900">Per-Bill Profit & Loss Ledger</h3>
@@ -922,11 +944,35 @@ export const ProfitLossPage = () => {
             </table>
           </div>
         </div>
+        </div>
       )}
 
       {/* TAB 3: PER-CUSTOMER PROFITABILITY */}
       {activeTab === 'customers' && (
-        <div className="bird-card p-5 space-y-4">
+        <div className="space-y-3 sm:space-y-4">
+          {/* Quick Summary Strip for Customers */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            <div className="bird-card p-2.5 sm:p-3 text-center">
+              <span className="text-[10px] sm:text-xs text-zinc-400 font-medium block">Total Customers</span>
+              <span className="text-sm sm:text-lg font-bold text-zinc-900 tabular-nums">
+                {customersData.length || 0}
+              </span>
+            </div>
+            <div className="bird-card p-2.5 sm:p-3 text-center">
+              <span className="text-[10px] sm:text-xs text-zinc-400 font-medium block">Total Gross Profit</span>
+              <span className="text-sm sm:text-lg font-bold text-zinc-900 tabular-nums">
+                ₹{(summaryData?.grossProfit || 0).toLocaleString('en-IN')}
+              </span>
+            </div>
+            <div className="bird-card p-2.5 sm:p-3 text-center bg-emerald-50/50 border-emerald-200">
+              <span className="text-[10px] sm:text-xs text-emerald-700 font-medium block">Store Margin</span>
+              <span className="text-sm sm:text-lg font-bold text-emerald-800 tabular-nums">
+                {summaryData?.grossMarginPercent || 0}%
+              </span>
+            </div>
+          </div>
+
+          <div className="bird-card p-4 sm:p-5 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-sm text-zinc-900">Per-Customer Profitability Ranking</h3>
@@ -1053,6 +1099,7 @@ export const ProfitLossPage = () => {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
 
