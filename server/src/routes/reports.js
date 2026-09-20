@@ -326,8 +326,8 @@ router.get('/dashboard', async (req, res) => {
       lowStockProducts: lowStockProducts.slice(0, 5),
     };
 
-    // Cache in memory for 20 seconds to eliminate repeat roundtrips
-    CacheService.set(cacheKey, dashboardPayload, 20000);
+    // Cache in memory for 60 seconds to eliminate repeat roundtrips
+    CacheService.set(cacheKey, dashboardPayload, 60000);
 
     res.json(dashboardPayload);
 
@@ -610,8 +610,8 @@ router.get('/category-hub', async (req, res) => {
       ledgers,
     };
 
-    // Cache in memory for 20 seconds
-    CacheService.set(cacheKey, categoryHubPayload, 20000);
+    // Cache in memory for 60 seconds
+    CacheService.set(cacheKey, categoryHubPayload, 60000);
 
     res.json(categoryHubPayload);
   } catch (err) {

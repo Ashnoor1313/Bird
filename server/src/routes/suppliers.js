@@ -1,5 +1,6 @@
 import express from 'express';
 import prisma from '../prisma.js';
+import { CacheService } from '../services/CacheService.js';
 
 const router = express.Router();
 
@@ -8,6 +9,12 @@ router.get('/', async (req, res) => {
   try {
     const { businessId, search, locationId } = req.query;
     if (!businessId) return res.status(400).json({ error: 'businessId required' });
+
+    const cacheKey = `suppliers:${businessId}:${locationId || 'ALL'}:${search || ''}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
     let where = { businessId };
 
@@ -42,6 +49,7 @@ router.get('/', async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
+    CacheService.set(cacheKey, suppliers, 60000);
     res.json(suppliers);
   } catch (err) {
     console.error('Fetch suppliers error:', err);
@@ -127,6 +135,7 @@ router.post('/', async (req, res) => {
       });
     }
 
+    CacheService.invalidate('suppliers');
     res.status(201).json(supplier);
   } catch (err) {
     if (err.code === 'P2002') {
@@ -145,6 +154,7 @@ router.put('/:id', async (req, res) => {
       where: { id: req.params.id },
       data: { name, phone, email, address, gstin, state },
     });
+    CacheService.invalidate('suppliers');
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update supplier' });
@@ -157,6 +167,7 @@ router.delete('/:id', async (req, res) => {
     await prisma.supplier.delete({
       where: { id: req.params.id },
     });
+    CacheService.invalidate('suppliers');
     res.json({ message: 'Supplier deleted successfully' });
   } catch (err) {
     console.error('Delete supplier error:', err);

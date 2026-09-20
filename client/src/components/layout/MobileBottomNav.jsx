@@ -1,5 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -14,10 +16,43 @@ import {
 } from 'lucide-react';
 
 export const MobileBottomNav = ({ onOpenQuickAction, onOpenMore }) => {
+  const queryClient = useQueryClient();
+  const { activeBusiness } = useBusiness();
   const { activeLocation } = useLocation();
   const { isAdmin } = useAuth();
 
   const isGodown = !activeLocation || activeLocation.type === 'GODOWN';
+
+  const prefetchItem = (path) => {
+    if (!activeBusiness?.id) return;
+    const bId = activeBusiness.id;
+    const lId = activeLocation?.id || 'ALL';
+    if (path === '/folders') {
+      queryClient.prefetchQuery({
+        queryKey: ['category-hub', bId, 'Folders', lId],
+        queryFn: () => fetch(`/api/reports/category-hub?businessId=${bId}&categoryName=Folders&locationId=${lId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/batteries') {
+      queryClient.prefetchQuery({
+        queryKey: ['category-hub', bId, 'Batteries', lId],
+        queryFn: () => fetch(`/api/reports/category-hub?businessId=${bId}&categoryName=Batteries&locationId=${lId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/sales') {
+      queryClient.prefetchQuery({
+        queryKey: ['sales', bId, lId, 'ALL', '', 1, 50],
+        queryFn: () => fetch(`/api/sales?businessId=${bId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/money') {
+      queryClient.prefetchQuery({
+        queryKey: ['money-balances', bId, lId, 'ALL'],
+        queryFn: () => fetch(`/api/money/balances?businessId=${bId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    }
+  };
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-3 py-1.5 flex items-center justify-around safe-bottom shadow-lg shadow-slate-900/5">
@@ -37,6 +72,8 @@ export const MobileBottomNav = ({ onOpenQuickAction, onOpenMore }) => {
       {/* 2. Folders Tab */}
       <NavLink
         to="/folders"
+        onMouseEnter={() => prefetchItem('/folders')}
+        onTouchStart={() => prefetchItem('/folders')}
         className={({ isActive }) =>
           `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-[10px] font-semibold transition-colors ${
             isActive ? 'text-blue-600 font-bold' : 'text-slate-400 hover:text-slate-700'
@@ -62,6 +99,8 @@ export const MobileBottomNav = ({ onOpenQuickAction, onOpenMore }) => {
       {/* 4. Batteries Tab */}
       <NavLink
         to="/batteries"
+        onMouseEnter={() => prefetchItem('/batteries')}
+        onTouchStart={() => prefetchItem('/batteries')}
         className={({ isActive }) =>
           `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-[10px] font-semibold transition-colors ${
             isActive ? 'text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-700'
@@ -75,6 +114,8 @@ export const MobileBottomNav = ({ onOpenQuickAction, onOpenMore }) => {
       {/* 5. Billing / Money Tab */}
       <NavLink
         to={isGodown ? "/money" : "/sales"}
+        onMouseEnter={() => prefetchItem(isGodown ? '/money' : '/sales')}
+        onTouchStart={() => prefetchItem(isGodown ? '/money' : '/sales')}
         className={({ isActive }) =>
           `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-[10px] font-semibold transition-colors ${
             isActive ? 'text-slate-950 font-bold' : 'text-slate-400 hover:text-slate-700'

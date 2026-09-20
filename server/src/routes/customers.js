@@ -1,5 +1,6 @@
 import express from 'express';
 import prisma from '../prisma.js';
+import { CacheService } from '../services/CacheService.js';
 
 const router = express.Router();
 
@@ -8,6 +9,12 @@ router.get('/', async (req, res) => {
   try {
     const { businessId, search, locationId, categoryId } = req.query;
     if (!businessId) return res.status(400).json({ error: 'businessId required' });
+
+    const cacheKey = `customers:${businessId}:${locationId || 'ALL'}:${categoryId || 'ALL'}:${search || ''}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
     let where = { businessId };
 
@@ -39,6 +46,7 @@ router.get('/', async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
+    CacheService.set(cacheKey, customers, 60000);
     res.json(customers);
   } catch (err) {
     console.error('Fetch customers error:', err);
@@ -127,6 +135,8 @@ router.post('/', async (req, res) => {
       });
     }
 
+    CacheService.invalidate('customers');
+    CacheService.invalidate('category-hub');
     res.status(201).json(customer);
   } catch (err) {
     if (err.code === 'P2002') {
@@ -147,6 +157,8 @@ router.put('/:id', async (req, res) => {
       where: { id: req.params.id },
       data,
     });
+    CacheService.invalidate('customers');
+    CacheService.invalidate('category-hub');
     res.json(updated);
   } catch (err) {
     console.error('Update customer error:', err);
@@ -158,6 +170,8 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     await prisma.customer.delete({ where: { id: req.params.id } });
+    CacheService.invalidate('customers');
+    CacheService.invalidate('category-hub');
     res.json({ success: true, message: 'Customer deleted' });
   } catch (err) {
     console.error('Delete customer error:', err);

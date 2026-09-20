@@ -12,6 +12,7 @@ import { SupplierMatcher } from '../services/SupplierMatcher.js';
 import { InvoiceValidator } from '../services/InvoiceValidator.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
 import { OcrJobService } from '../services/OcrJobService.js';
+import { CacheService } from '../services/CacheService.js';
 
 import os from 'os';
 import fs from 'fs';
@@ -48,6 +49,12 @@ router.get('/', async (req, res) => {
     const { businessId, receivingLocationId, search } = req.query;
     if (!businessId) return res.status(400).json({ error: 'businessId required' });
 
+    const cacheKey = `purchases:${businessId}:${receivingLocationId || 'ALL'}:${search || ''}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     let where = { businessId };
     if (receivingLocationId && receivingLocationId !== 'ALL') {
       where.receivingLocationId = receivingLocationId;
@@ -72,6 +79,7 @@ router.get('/', async (req, res) => {
       take: 100,
     });
 
+    CacheService.set(cacheKey, purchases, 60000);
     res.json(purchases);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch purchases' });
@@ -421,6 +429,14 @@ router.post('/', async (req, res) => {
 
       return purchase;
     });
+
+    // ⚡ Invalidate related caches immediately
+    CacheService.invalidate('purchases');
+    CacheService.invalidate('products');
+    CacheService.invalidate('category-hub');
+    CacheService.invalidate('dashboard');
+    CacheService.invalidate('suppliers');
+    CacheService.invalidate('money');
 
     res.status(201).json(result);
   } catch (err) {

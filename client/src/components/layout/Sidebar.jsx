@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -21,9 +22,53 @@ import {
 
 export const Sidebar = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { activeBusiness } = useBusiness();
   const { activeLocation } = useLocation();
   const { isAdmin, user, setAdminModalOpen, lockAdminMode } = useAuth();
+
+  const prefetchItem = (path) => {
+    if (!activeBusiness?.id) return;
+    const bId = activeBusiness.id;
+    const lId = activeLocation?.id || 'ALL';
+    if (path === '/folders' || path === '/stock/folders') {
+      queryClient.prefetchQuery({
+        queryKey: ['category-hub', bId, 'Folders', lId],
+        queryFn: () => fetch(`/api/reports/category-hub?businessId=${bId}&categoryName=Folders&locationId=${lId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/batteries' || path === '/stock/batteries') {
+      queryClient.prefetchQuery({
+        queryKey: ['category-hub', bId, 'Batteries', lId],
+        queryFn: () => fetch(`/api/reports/category-hub?businessId=${bId}&categoryName=Batteries&locationId=${lId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/sales') {
+      queryClient.prefetchQuery({
+        queryKey: ['sales', bId, lId, 'ALL', '', 1, 50],
+        queryFn: () => fetch(`/api/sales?businessId=${bId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/customers') {
+      queryClient.prefetchQuery({
+        queryKey: ['customers', bId, lId, 'ALL', '', 1, 50],
+        queryFn: () => fetch(`/api/customers?businessId=${bId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/suppliers') {
+      queryClient.prefetchQuery({
+        queryKey: ['suppliers', bId, lId, '', 1, 50],
+        queryFn: () => fetch(`/api/suppliers?businessId=${bId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/money') {
+      queryClient.prefetchQuery({
+        queryKey: ['money-balances', bId, lId, 'ALL'],
+        queryFn: () => fetch(`/api/money/balances?businessId=${bId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    }
+  };
 
   const businessName = activeBusiness?.name || 'MI2 Impex';
   const isGodown = !activeLocation || activeLocation.type === 'GODOWN';
@@ -113,6 +158,8 @@ export const Sidebar = () => {
                   <NavLink
                     key={item.path}
                     to={item.path}
+                    onMouseEnter={() => prefetchItem(item.path)}
+                    onTouchStart={() => prefetchItem(item.path)}
                     className={({ isActive }) =>
                       `flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium transition-colors ${
                         isActive

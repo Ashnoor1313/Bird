@@ -3,6 +3,7 @@ import xlsx from 'xlsx';
 import prisma from '../prisma.js';
 import { StockEngine } from '../services/StockEngine.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
+import { CacheService } from '../services/CacheService.js';
 
 const router = express.Router();
 
@@ -13,6 +14,12 @@ router.get('/', async (req, res) => {
 
     if (!businessId) {
       return res.status(400).json({ error: 'businessId is required' });
+    }
+
+    const cacheKey = `products:${businessId}:${categoryId || 'ALL'}:${quality || ''}:${stockStatus || ''}:${locationId || 'ALL'}:${search || ''}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
     let where = {
@@ -77,6 +84,7 @@ router.get('/', async (req, res) => {
       }
     }
 
+    CacheService.set(cacheKey, products, 60000);
     res.json(products);
   } catch (err) {
     console.error('Fetch products error:', err);
@@ -441,6 +449,10 @@ router.post('/', async (req, res) => {
       include: { category: true, locationStocks: { include: { location: true } } },
     });
 
+    CacheService.invalidate('products');
+    CacheService.invalidate('category-hub');
+    CacheService.invalidate('dashboard');
+
     res.status(201).json(finalProduct || product);
   } catch (err) {
     console.error('Create product error:', err);
@@ -505,6 +517,10 @@ router.put('/:id', async (req, res) => {
       },
     });
 
+    CacheService.invalidate('products');
+    CacheService.invalidate('category-hub');
+    CacheService.invalidate('dashboard');
+
     res.json(updated);
   } catch (err) {
     console.error('Update product error:', err);
@@ -519,6 +535,9 @@ router.delete('/:id', async (req, res) => {
       where: { id: req.params.id },
       data: { status: 'ARCHIVED' },
     });
+    CacheService.invalidate('products');
+    CacheService.invalidate('category-hub');
+    CacheService.invalidate('dashboard');
     res.json({ message: 'Product archived successfully', product });
   } catch (err) {
     res.status(500).json({ error: 'Failed to archive product' });

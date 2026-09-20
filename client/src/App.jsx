@@ -1,11 +1,13 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './lib/queryClient';
+import { useQueryClient } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { BusinessProvider } from './context/BusinessContext';
-import { LocationProvider } from './context/LocationContext';
+import { BusinessProvider, useBusiness } from './context/BusinessContext';
+import { LocationProvider, useLocation as useAppLocation } from './context/LocationContext';
 import { ToastProvider } from './context/ToastContext';
+import { preloadRouteComponents, prefetchAllHubData } from './hooks/useApiQueries';
 
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
@@ -40,6 +42,10 @@ import { AdminUnlockModal } from './components/modals/AdminUnlockModal';
 import { SplashScreen } from './components/common/SplashScreen';
 
 function AppLayout() {
+  const queryClient = useQueryClient();
+  const { activeBusinessId } = useBusiness();
+  const { activeLocationId } = useAppLocation();
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
   const { adminModalOpen, setAdminModalOpen } = useAuth();
@@ -51,6 +57,18 @@ function AppLayout() {
       return false;
     }
   });
+
+  // ⚡ Preload code chunks in background immediately on app start
+  useEffect(() => {
+    preloadRouteComponents();
+  }, []);
+
+  // ⚡ Prefetch all hub data in background so clicking options loads with ZERO delay
+  useEffect(() => {
+    if (activeBusinessId) {
+      prefetchAllHubData(queryClient, activeBusinessId, activeLocationId);
+    }
+  }, [queryClient, activeBusinessId, activeLocationId]);
 
   const handleSplashFinish = React.useCallback(() => {
     try {

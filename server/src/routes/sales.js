@@ -9,6 +9,7 @@ import { DocumentAIOrchestrator } from '../services/DocumentAIProvider.js';
 import { ProductMatcher } from '../services/ProductMatcher.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
 import { OcrJobService } from '../services/OcrJobService.js';
+import { CacheService } from '../services/CacheService.js';
 
 import os from 'os';
 import fs from 'fs';
@@ -41,6 +42,12 @@ router.get('/', async (req, res) => {
     const { businessId, locationId, categoryId, search } = req.query;
     if (!businessId) return res.status(400).json({ error: 'businessId required' });
 
+    const cacheKey = `sales:${businessId}:${locationId || 'ALL'}:${categoryId || 'ALL'}:${search || ''}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     let where = { businessId };
     if (locationId && locationId !== 'ALL') {
       where.locationId = locationId;
@@ -69,6 +76,7 @@ router.get('/', async (req, res) => {
       take: 100,
     });
 
+    CacheService.set(cacheKey, sales, 60000); // 60s cache
     res.json(sales);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch sales' });
@@ -440,6 +448,15 @@ router.post('/', async (req, res) => {
 
       return sale;
     });
+
+    // ⚡ Invalidate related caches immediately so fresh data is visible
+    CacheService.invalidate('sales');
+    CacheService.invalidate('category-hub');
+    CacheService.invalidate('dashboard');
+    CacheService.invalidate('pnl');
+    CacheService.invalidate('customers');
+    CacheService.invalidate('money');
+    CacheService.invalidate('products');
 
     res.status(201).json(result);
   } catch (err) {
