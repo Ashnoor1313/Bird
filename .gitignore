@@ -25,8 +25,17 @@ server/uploads/*
 
 # SQLite Database (for fresh deployment)
 # server/prisma/*.db
-# server/prisma/*.db-journal
+server/prisma/*.db-shm
+server/prisma/*.db-wal
+server/prisma/*.db-journal
 
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# AI Voice Reminder (Local testing only - excluded from production deployment)
+server/src/services/ai-payment-reminder/
+server/src/routes/aiReminder.js
+server/test/ai_reminder_isolation.test.js
+client/src/pages/AiReminderTestPage.jsx
+

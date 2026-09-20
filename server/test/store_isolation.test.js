@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/prisma.js';
 import { LedgerEngine } from '../src/services/LedgerEngine.js';
-
-const prisma = new PrismaClient();
 
 async function runStoreIsolationTests() {
   console.log('🧪 Starting BIRD Store Isolation Automated Test Suite...\n');

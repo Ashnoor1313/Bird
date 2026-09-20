@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/prisma.js';
 import { StockEngine } from '../src/services/StockEngine.js';
-
-const prisma = new PrismaClient();
 
 async function runCommonInventoryTests() {
   console.log('🧪 ========================================================');

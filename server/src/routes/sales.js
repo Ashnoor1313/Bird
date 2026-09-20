@@ -8,6 +8,7 @@ import { LedgerEngine } from '../services/LedgerEngine.js';
 import { DocumentAIOrchestrator } from '../services/DocumentAIProvider.js';
 import { ProductMatcher } from '../services/ProductMatcher.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
+import { OcrJobService } from '../services/OcrJobService.js';
 
 import os from 'os';
 import fs from 'fs';
@@ -71,6 +72,27 @@ router.get('/', async (req, res) => {
     res.json(sales);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch sales' });
+  }
+});
+
+// ASYNC SCAN JOB CREATION FOR SALES (Instant return for mobile devices)
+router.post('/scan-job', upload.single('billFile'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Bill file/image is required' });
+    }
+    const job = OcrJobService.createJob(req.file, { ...req.body, type: 'SALE' });
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      step: job.step,
+      percent: job.percent,
+      message: job.message,
+    });
+  } catch (err) {
+    console.error('Sales scan job creation error:', err);
+    res.status(500).json({ error: 'Failed to create sales scan job' });
   }
 });
 
@@ -435,14 +457,16 @@ router.get('/:id/pdf', async (req, res) => {
         business: true,
         items: true,
         customer: true,
+        location: true,
       },
     });
 
     if (!sale) return res.status(404).json({ error: 'Bill not found' });
 
-    const doc = new PDFDocument({ margin: 36, size: 'A4' });
+    const doc = new PDFDocument({ margin: 40, size: 'A4' });
+    const cleanBillNo = String(sale.billNo || '1001').replace(/[^a-zA-Z0-9_-]/g, '_');
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename=INVOICE_${sale.billNo}.pdf`);
+    res.setHeader('Content-Disposition', `inline; filename="Invoice_${cleanBillNo}.pdf"`);
 
     doc.pipe(res);
 
@@ -455,246 +479,254 @@ router.get('/:id/pdf', async (req, res) => {
     };
 
     const business = sale.business || {};
-    const businessName = cleanPdfText(business.name) || 'Bird Mobile Parts';
-    const customerName = cleanPdfText(sale.customerName) || 'Walk-in Customer';
-    const primaryColor = '#0284c7';
-    const darkColor = '#0f172a';
-    const grayColor = '#475569';
-    const lightBg = '#f8fafc';
-    const borderColor = '#cbd5e1';
+    const businessName = cleanPdfText(business.name) || 'BIRD Mobile Spare Parts';
+    const locationName = cleanPdfText(sale.location?.name) || 'Main Store';
+    const businessAddress = cleanPdfText(business.address);
+    const businessPhone = cleanPdfText(business.phone);
+    const businessGstin = cleanPdfText(business.gstin);
+    const billNo = cleanPdfText(sale.billNo || sale.invoiceNumber || '1001');
 
-    // 1. TOP BRAND ACCENT BAR
-    doc.rect(0, 0, 595.28, 6).fill(primaryColor);
+    const customerName = cleanPdfText(sale.customerName) || (sale.customer?.name ? cleanPdfText(sale.customer.name) : 'Walk-in Customer');
+    const customerPhone = cleanPdfText(sale.customerPhone) || (sale.customer?.phone ? cleanPdfText(sale.customer.phone) : '');
 
-    // 2. HEADER SECTION (Left: Logo & Business Info, Right: Invoice Badge Box)
-    let curY = 30;
+    const items = sale.items || [];
+    const subtotal = Number(sale.subtotal) || items.reduce((acc, i) => acc + (Number(i.quantity || 1) * Number(i.unitPrice || 0)), 0);
+    const discount = Number(sale.discount) || 0;
+    const total = Number(sale.total) || (subtotal - discount);
+    const paidAmount = Number(sale.paidAmount) ?? total;
+    const dueAmount = Number(sale.dueAmount) ?? Math.max(0, total - paidAmount);
+    const paymentMethod = sale.paymentMethod || 'CASH';
 
-    // Vector Logo Square Badge
-    doc.save();
-    doc.roundedRect(36, curY, 34, 34, 8).fill(primaryColor);
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(14).text('B', 36, curY + 9, { width: 34, align: 'center' });
-    doc.restore();
+    const dateStr = sale.createdAt || sale.saleDate
+      ? new Date(sale.createdAt || sale.saleDate).toLocaleString('en-IN', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        })
+      : new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
-    // Business Name & Details
-    doc.fillColor(darkColor).font('Helvetica-Bold').fontSize(18).text(businessName, 78, curY);
-    doc.fillColor(grayColor).font('Helvetica').fontSize(8.5).text(cleanPdfText(business.address) || '', 78, curY + 22, { width: 280 });
-    const subInfoY = doc.y;
-    doc.text(`Phone: ${cleanPdfText(business.phone) || 'N/A'}`, 78, subInfoY);
+    const formatCurrency = (val) => {
+      return 'Rs. ' + Number(val || 0).toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    };
 
-    // Right Side: Invoice Title Badge Box
-    doc.roundedRect(375, curY, 184, 62, 6).fill(lightBg).strokeColor(borderColor).lineWidth(1).stroke();
-    doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(13).text('BILL / INVOICE', 380, curY + 8, { align: 'center', width: 174 });
-    doc.fillColor(darkColor).font('Helvetica-Bold').fontSize(10).text(`#${sale.billNo}`, 380, curY + 25, { align: 'center', width: 174 });
-    doc.fillColor(grayColor).font('Helvetica').fontSize(8.5).text(`Date: ${new Date(sale.saleDate).toLocaleDateString('en-IN')}`, 380, curY + 41, { align: 'center', width: 174 });
+    const startX = 40;
+    const pageWidth = 515.28;
+    const endX = startX + pageWidth; // 555.28
+    let curY = 40;
 
-    curY = Math.max(doc.y, curY + 70);
+    // 1. STORE / BUSINESS HEADER (MATCHING PREVIEW)
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(16).text(businessName.toUpperCase(), startX, curY, {
+      align: 'center',
+      width: pageWidth,
+    });
+    curY = doc.y + 4;
 
-    // 3. BILLED TO CARD & PAYMENT STATUS BADGE
-    doc.roundedRect(36, curY, 523, 48, 6).fill('#f1f5f9').strokeColor(borderColor).lineWidth(1).stroke();
+    const locAddrText = [locationName, businessAddress].filter(Boolean).join(' • ');
+    doc.fillColor('#52525b').font('Helvetica-Bold').fontSize(9).text(locAddrText, startX, curY, {
+      align: 'center',
+      width: pageWidth,
+    });
+    curY = doc.y + 3;
 
-    doc.fillColor(grayColor).font('Helvetica-Bold').fontSize(7.5).text('BILLED TO (CUSTOMER)', 48, curY + 8);
-    doc.fillColor(darkColor).font('Helvetica-Bold').fontSize(10.5).text(customerName, 48, curY + 20);
-    if (sale.customerPhone) {
-      doc.fillColor(grayColor).font('Helvetica').fontSize(8.5).text(`Phone: ${cleanPdfText(sale.customerPhone)}`, 48, curY + 33);
+    if (businessPhone) {
+      doc.fillColor('#52525b').font('Helvetica').fontSize(9);
+      doc.text(`Phone: ${businessPhone}`, startX, curY, {
+        align: 'center',
+        width: pageWidth,
+      });
+      curY = doc.y + 3;
     }
 
-    // Payment Status Pill
-    const isPaid = sale.dueAmount <= 0;
-    const statusBg = isPaid ? '#dcfce7' : '#fee2e2';
-    const statusText = isPaid ? '#15803d' : '#b91c1c';
-    const statusLabel = isPaid ? 'PAID IN FULL' : `BALANCE DUE: Rs. ${sale.dueAmount.toFixed(2)}`;
+    if (businessGstin) {
+      doc.fillColor('#71717a').font('Helvetica').fontSize(8);
+      doc.text(`GSTIN: ${businessGstin}`, startX, curY, {
+        align: 'center',
+        width: pageWidth,
+      });
+      curY = doc.y + 4;
+    }
 
-    doc.roundedRect(410, curY + 13, 136, 22, 11).fill(statusBg);
-    doc.fillColor(statusText).font('Helvetica-Bold').fontSize(8).text(statusLabel, 410, curY + 20, { align: 'center', width: 136 });
-
-    curY += 58;
-
-    // 4. ITEMS TABLE
-    const tableHeaders = [
-      { label: '#', x: 42, width: 20, align: 'left' },
-      { label: 'ITEM & SPARE PART DESCRIPTION', x: 65, width: 265, align: 'left' },
-      { label: 'QTY', x: 330, width: 40, align: 'right' },
-      { label: 'RATE (Rs.)', x: 375, width: 75, align: 'right' },
-      { label: 'TOTAL (Rs.)', x: 455, width: 95, align: 'right' },
-    ];
-
-    // Header Row Background
-    doc.roundedRect(36, curY, 523, 22, 4).fill(primaryColor);
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8);
-    tableHeaders.forEach(h => {
-      doc.text(h.label, h.x, curY + 6, { width: h.width, align: h.align });
+    // Centered Black Badge: "CASH MEMO / SALES INVOICE"
+    const badgeW = 180;
+    const badgeH = 18;
+    const badgeX = startX + (pageWidth - badgeW) / 2;
+    doc.roundedRect(badgeX, curY, badgeW, badgeH, 3).fill('#18181b');
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(8).text('CASH MEMO / SALES INVOICE', badgeX, curY + 4.5, {
+      align: 'center',
+      width: badgeW,
     });
+    curY += badgeH + 10;
 
-    curY += 25;
-
-    // Table Rows
-    sale.items.forEach((item, index) => {
-      const isEven = index % 2 === 0;
-      if (isEven) {
-        doc.rect(36, curY - 2, 523, 20).fill('#f8fafc');
-      }
-
-      doc.fillColor(darkColor).font('Helvetica').fontSize(8.5);
-      doc.text((index + 1).toString(), 42, curY, { width: 20, align: 'left' });
-
-      const itemDesc = cleanPdfText(item.productName);
-      doc.font('Helvetica-Bold').text(itemDesc, 65, curY, { width: 265, align: 'left' });
-
-      doc.font('Helvetica').text(item.quantity.toString(), 330, curY, { width: 40, align: 'right' });
-      doc.text(item.unitPrice.toFixed(2), 375, curY, { width: 75, align: 'right' });
-      doc.font('Helvetica-Bold').text(item.total.toFixed(2), 455, curY, { width: 95, align: 'right' });
-
-      curY += 20;
-    });
-
-    doc.moveTo(36, curY).lineTo(559, curY).strokeColor(borderColor).lineWidth(1).stroke();
+    // Thick Header Bottom Divider (2px)
+    doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#18181b').lineWidth(2).stroke();
     curY += 12;
 
-    // 5. SUMMARY BOX & BANK DETAILS SIDE-BY-SIDE
-    const summaryStartY = curY;
+    // 2. INVOICE METADATA (BILLED TO & INVOICE NO / DATE - 2 COLUMNS)
+    const metaStartY = curY;
 
-    // Left Side: Bank Details Card
-    if (business.bankName || business.upiId) {
-      doc.roundedRect(36, summaryStartY, 255, 95, 6).fill('#f8fafc').strokeColor(borderColor).lineWidth(1).stroke();
-      doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(8.5).text('PAYMENT DETAILS', 46, summaryStartY + 8);
-
-      let bankY = summaryStartY + 23;
-      if (business.bankName) {
-        doc.fillColor(grayColor).font('Helvetica').fontSize(8).text(`Bank: ${business.bankName}`, 46, bankY);
-        bankY += 13;
-      }
-      if (business.accountNo) {
-        doc.fillColor(grayColor).font('Helvetica').fontSize(8).text(`A/C No: ${business.accountNo}`, 46, bankY);
-        bankY += 13;
-      }
-      if (business.ifscCode) {
-        doc.fillColor(grayColor).font('Helvetica').fontSize(8).text(`IFSC Code: ${business.ifscCode}`, 46, bankY);
-        bankY += 13;
-      }
-      if (business.upiId) {
-        doc.fillColor(darkColor).font('Helvetica-Bold').fontSize(8).text(`UPI ID: ${business.upiId}`, 46, bankY);
-      }
+    // Left Column: Customer Details
+    doc.fillColor('#a1a1aa').font('Helvetica-Bold').fontSize(7.5).text('BILLED TO:', startX, metaStartY);
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(11).text(customerName, startX, metaStartY + 12, { width: 250 });
+    let leftEndY = doc.y;
+    if (customerPhone) {
+      doc.fillColor('#52525b').font('Helvetica').fontSize(8.5).text(`Ph: ${customerPhone}`, startX, leftEndY + 2, { width: 250 });
+      leftEndY = doc.y;
     }
 
-    // Right Side: Totals Summary Card
-    doc.roundedRect(305, summaryStartY, 254, 100, 6).fill('#f8fafc').strokeColor(borderColor).lineWidth(1).stroke();
+    // Right Column: Invoice # and Date
+    doc.fillColor('#a1a1aa').font('Helvetica-Bold').fontSize(7.5).text('INVOICE NO:', 305, metaStartY, { align: 'right', width: 250.28 });
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(11).text(`#${billNo}`, 305, metaStartY + 10, { align: 'right', width: 250.28 });
+    const rightDateY = metaStartY + 25;
+    doc.fillColor('#a1a1aa').font('Helvetica-Bold').fontSize(7.5).text('DATE:', 305, rightDateY, { align: 'right', width: 250.28 });
+    doc.fillColor('#3f3f46').font('Helvetica').fontSize(8.5).text(dateStr, 305, rightDateY + 10, { align: 'right', width: 250.28 });
+    const rightEndY = rightDateY + 22;
 
-    let totY = summaryStartY + 8;
-    doc.fillColor(grayColor).font('Helvetica').fontSize(8.5).text('Subtotal:', 315, totY);
-    doc.fillColor(darkColor).font('Helvetica-Bold').text(`Rs. ${sale.subtotal.toFixed(2)}`, 445, totY, { align: 'right', width: 104 });
-    totY += 14;
+    curY = Math.max(leftEndY, rightEndY) + 8;
 
-    if (sale.discount > 0) {
-      doc.fillColor(grayColor).font('Helvetica').fontSize(8.5).text('Discount:', 315, totY);
-      doc.fillColor('#dc2626').font('Helvetica-Bold').text(`-Rs. ${sale.discount.toFixed(2)}`, 445, totY, { align: 'right', width: 104 });
-      totY += 14;
+    // Divider Line Below Metadata
+    doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#e4e4e7').lineWidth(1).stroke();
+    curY += 12;
+
+    // 3. ITEMS TABLE
+    // Columns Layout:
+    // #: 40..65 (w:25, center)
+    // Item Description: 70..335 (w:265, left)
+    // Qty: 340..380 (w:40, center)
+    // Rate: 385..460 (w:75, right)
+    // Amount: 465..555 (w:90, right)
+    doc.fillColor('#27272a').font('Helvetica-Bold').fontSize(8);
+    doc.text('#', 40, curY, { width: 25, align: 'center' });
+    doc.text('ITEM DESCRIPTION', 70, curY, { width: 265, align: 'left' });
+    doc.text('QTY', 340, curY, { width: 40, align: 'center' });
+    doc.text('RATE', 385, curY, { width: 75, align: 'right' });
+    doc.text('AMOUNT', 465, curY, { width: 90, align: 'right' });
+    curY += 14;
+
+    // Thick black line under table header
+    doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#18181b').lineWidth(1.5).stroke();
+    curY += 8;
+
+    items.forEach((item, idx) => {
+      // Automatic page break if running out of space
+      if (curY > 720) {
+        doc.addPage();
+        curY = 40;
+      }
+
+      // Index
+      doc.fillColor('#71717a').font('Helvetica-Bold').fontSize(8.5).text(String(idx + 1), 40, curY, { width: 25, align: 'center' });
+
+      // Product Description
+      const itemDesc = cleanPdfText(item.productName) || 'Product';
+      doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(8.5).text(itemDesc, 70, curY, { width: 265, align: 'left' });
+      let descEndY = doc.y;
+
+      if (item.model && cleanPdfText(item.model) !== itemDesc) {
+        doc.fillColor('#71717a').font('Helvetica').fontSize(7.5).text(`Model: ${cleanPdfText(item.model)}`, 70, descEndY + 1, { width: 265, align: 'left' });
+        descEndY = doc.y;
+      }
+
+      // Qty
+      const qty = item.quantity || 1;
+      doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(8.5).text(String(qty), 340, curY, { width: 40, align: 'center' });
+
+      // Rate
+      const unitPrice = Number(item.unitPrice) || 0;
+      doc.fillColor('#27272a').font('Helvetica').fontSize(8.5).text(formatCurrency(unitPrice), 385, curY, { width: 75, align: 'right' });
+
+      // Amount
+      const itemAmount = Number(item.total) || (qty * unitPrice);
+      doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(8.5).text(formatCurrency(itemAmount), 465, curY, { width: 90, align: 'right' });
+
+      const rowHeight = Math.max(descEndY, curY + 12) - curY;
+      curY += Math.max(rowHeight, 14) + 6;
+
+      // Divider between rows
+      doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#e4e4e7').lineWidth(0.5).stroke();
+      curY += 7;
+    });
+
+    // 4. TOTALS & PAYMENT BREAKDOWN
+    if (curY > 670) {
+      doc.addPage();
+      curY = 40;
     }
 
-    // Grand Total Line
-    doc.moveTo(315, totY).lineTo(549, totY).strokeColor(borderColor).stroke();
-    totY += 5;
+    // Top border of totals
+    doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#18181b').lineWidth(2).stroke();
+    curY += 10;
 
-    doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(11).text('Grand Total:', 315, totY);
-    doc.fillColor(primaryColor).font('Helvetica-Bold').fontSize(11).text(`Rs. ${sale.total.toFixed(2)}`, 425, totY, { align: 'right', width: 124 });
-    totY += 16;
+    // Subtotal
+    doc.fillColor('#52525b').font('Helvetica').fontSize(8.5).text('Subtotal:', startX, curY);
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(8.5).text(formatCurrency(subtotal), 385, curY, { align: 'right', width: 170.28 });
+    curY += 14;
 
-    doc.fillColor('#15803d').font('Helvetica').fontSize(8.5).text('Amount Paid:', 315, totY);
-    doc.fillColor('#15803d').font('Helvetica-Bold').text(`Rs. ${sale.paidAmount.toFixed(2)}`, 445, totY, { align: 'right', width: 104 });
-
-    curY = summaryStartY + 115;
-
-    // 6. TERMS & CONDITIONS
-    if (business.terms) {
-      doc.fillColor(grayColor).font('Helvetica-Bold').fontSize(7.5).text('TERMS:', 36, curY);
-      doc.fillColor('#64748b').font('Helvetica').fontSize(7).text(business.terms, 36, curY + 10, { width: 523 });
+    // Discount (if any)
+    if (discount > 0) {
+      doc.fillColor('#b91c1c').font('Helvetica-Bold').fontSize(8.5).text('Discount:', startX, curY);
+      doc.fillColor('#b91c1c').font('Helvetica-Bold').fontSize(8.5).text('-' + formatCurrency(discount), 385, curY, { align: 'right', width: 170.28 });
+      curY += 14;
     }
 
-    // 7. FOOTER
-    doc.fillColor('#94a3b8').font('Helvetica').fontSize(7.5).text('Generated by BIRD — Mobile Spare-Parts Business Operating System', 36, 800, { align: 'center', width: 523 });
+    // Divider before Grand Total
+    doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#e4e4e7').lineWidth(0.75).stroke();
+    curY += 6;
+
+    // Total Amount
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(11).text('Total Amount:', startX, curY);
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(11).text(formatCurrency(total), 385, curY, { align: 'right', width: 170.28 });
+    curY += 18;
+
+    // Paid via Payment Method
+    doc.fillColor('#047857').font('Helvetica-Bold').fontSize(8.5).text(`Paid via ${paymentMethod}:`, startX, curY);
+    doc.fillColor('#047857').font('Helvetica-Bold').fontSize(8.5).text(formatCurrency(paidAmount), 385, curY, { align: 'right', width: 170.28 });
+    curY += 16;
+
+    // Payment Status Box
+    if (dueAmount > 0) {
+      doc.roundedRect(startX, curY, pageWidth, 22, 3).fillAndStroke('#fff1f2', '#fecdd3');
+      doc.fillColor('#b91c1c').font('Helvetica-Bold').fontSize(8.5).text('Balance Due (Khata):', startX + 10, curY + 6);
+      doc.fillColor('#b91c1c').font('Helvetica-Bold').fontSize(8.5).text(formatCurrency(dueAmount), 380, curY + 6, { align: 'right', width: 165.28 });
+      curY += 30;
+    } else {
+      doc.roundedRect(startX, curY, pageWidth, 20, 3).fillAndStroke('#ecfdf5', '#a7f3d0');
+      doc.fillColor('#047857').font('Helvetica-Bold').fontSize(8).text('Payment Status:', startX + 10, curY + 5.5);
+      doc.fillColor('#047857').font('Helvetica-Bold').fontSize(8).text('PAID IN FULL', 380, curY + 5.5, { align: 'right', width: 165.28 });
+      curY += 28;
+    }
+
+    // 5. TERMS & CONDITIONS
+    if (curY > 740) {
+      doc.addPage();
+      curY = 40;
+    }
+
+    // Divider before terms
+    doc.moveTo(startX, curY).lineTo(endX, curY).strokeColor('#e4e4e7').lineWidth(0.75).stroke();
+    curY += 10;
+
+    doc.fillColor('#3f3f46').font('Helvetica-Bold').fontSize(8).text('Terms & Conditions:', startX, curY, { align: 'center', width: pageWidth });
+    curY += 12;
+
+    const termsText = cleanPdfText(business.terms);
+    if (termsText) {
+      doc.fillColor('#71717a').font('Helvetica').fontSize(7.5).text(termsText, startX, curY, { align: 'center', width: pageWidth });
+      curY = doc.y + 6;
+    } else {
+      doc.fillColor('#71717a').font('Helvetica').fontSize(7.5).text('1. 7 Days Testing Warranty on Folders & Batteries (stamp & seal required).', startX, curY, { align: 'center', width: pageWidth });
+      curY += 11;
+      doc.fillColor('#71717a').font('Helvetica').fontSize(7.5).text('2. Physical damage, flex tear, or display glass break is NOT covered under testing warranty.', startX, curY, { align: 'center', width: pageWidth });
+      curY += 14;
+    }
+
+    doc.fillColor('#09090b').font('Helvetica-Bold').fontSize(8).text('Thank you for your business!', startX, curY, { align: 'center', width: pageWidth });
 
     doc.end();
   } catch (err) {
     console.error('PDF Invoice Error:', err);
     res.status(500).json({ error: 'Failed to generate invoice PDF' });
-  }
-});
-
-// SCAN BILL / DOCUMENT AI OCR ENDPOINT FOR SALES BILLS
-router.post('/scan', upload.single('billFile'), async (req, res) => {
-  let tempFilePath = null;
-  try {
-    const { businessId, categoryId, geminiApiKey } = req.body;
-    let targetBusinessId = businessId;
-    if (!targetBusinessId || targetBusinessId === 'undefined' || targetBusinessId === 'null') {
-      const firstBiz = await prisma.business.findFirst();
-      targetBusinessId = firstBiz?.id;
-    }
-
-    if (!targetBusinessId) {
-      return res.status(400).json({ error: 'Active business required' });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({ error: 'Bill file/image is required' });
-    }
-
-    tempFilePath = req.file.path;
-
-    // Run Document AI Orchestrator
-    const docResult = await DocumentAIOrchestrator.processDocument(tempFilePath, req.file.mimetype, { geminiApiKey });
-
-    if (!docResult || !docResult.items) {
-      return res.status(422).json({
-        error: 'Unable to extract structured line items from this document',
-        rawText: docResult?.rawText || '',
-      });
-    }
-
-    // Match extracted items against existing Catalog Products
-    const catalogProducts = await prisma.product.findMany({
-      where: {
-        businessId: targetBusinessId,
-        ...(categoryId && categoryId !== 'ALL' && categoryId !== 'undefined' ? { categoryId } : {}),
-      },
-    });
-
-    const reconciledItems = docResult.items.map((rawItem) => {
-      const normalizedDescription = ProductNormalizer.stripNoiseWords(rawItem.description || rawItem.name || '');
-      const matchResult = ProductMatcher.findBestMatch(normalizedDescription, catalogProducts);
-
-      const resolvedSellPrice = matchResult.matchedProduct?.sellingPrice || (rawItem.unitPrice > 0 ? Math.round(rawItem.unitPrice * 1.25) : rawItem.unitPrice || 0);
-
-      return {
-        productName: normalizedDescription || rawItem.description,
-        quantity: rawItem.quantity || 1,
-        unitPrice: rawItem.unitPrice > 0 ? rawItem.unitPrice : resolvedSellPrice,
-        purchasePrice: matchResult.matchedProduct?.purchasePrice || 0,
-        total: (rawItem.quantity || 1) * (rawItem.unitPrice > 0 ? rawItem.unitPrice : resolvedSellPrice),
-        matchedProductId: matchResult.matchedProduct?.id || null,
-        matchedProduct: matchResult.matchedProduct || null,
-        confidence: matchResult.confidence,
-      };
-    });
-
-    return res.json({
-      success: true,
-      documentType: docResult.documentType || 'SALES_INVOICE',
-      customerName: docResult.customerName || docResult.customer?.name || null,
-      customerPhone: docResult.customerPhone || docResult.customer?.phone || null,
-      invoiceNumber: docResult.invoiceNumber || null,
-      invoiceDate: docResult.invoiceDate || new Date().toISOString().split('T')[0],
-      items: reconciledItems,
-      grandTotal: docResult.grandTotal || 0,
-      confidence: docResult.confidence || { overall: 85 },
-      rawText: docResult.rawText || '',
-    });
-  } catch (err) {
-    console.error('Sales bill scan error:', err);
-    return res.status(500).json({ error: 'Failed to process sales bill image', details: err.message });
-  } finally {
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
-      try { fs.unlinkSync(tempFilePath); } catch (e) {}
-    }
   }
 });
 

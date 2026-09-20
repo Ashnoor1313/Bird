@@ -23,6 +23,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { compressMobileBillImage, submitAndPollOcrJob } from '../utils/ocrMobileHelper';
+import { OcrScanProgress } from '../components/common/OcrScanProgress';
 
 export const ScanBillPage = () => {
   const { activeBusinessId } = useBusiness();
@@ -33,6 +35,8 @@ export const ScanBillPage = () => {
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ status: 'IDLE', step: 1, message: 'Uploading...', percent: 0 });
+  const [ocrError, setOcrError] = useState(null);
   const [step, setStep] = useState('upload'); // 'upload' | 'review' | 'success'
 
   // Extracted OCR Review State
@@ -49,112 +53,19 @@ export const ScanBillPage = () => {
   const [selectingProductIndex, setSelectingProductIndex] = useState(null);
   const [confirmingIntake, setConfirmingIntake] = useState(false);
 
-// Ultra-fast client-side GPU image compressor (resizes 40MP camera photo to ~100KB in ~10ms for instant mobile OCR)
-const compressImageFile = async (imageFile) => {
-  if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
-  try {
-    if ('createImageBitmap' in window) {
-      const bitmap = await createImageBitmap(imageFile);
-      const MAX_DIM = 1400;
-      let width = bitmap.width;
-      let height = bitmap.height;
-
-      if (width > height && width > MAX_DIM) {
-        height = Math.round((height * MAX_DIM) / width);
-        width = MAX_DIM;
-      } else if (height > MAX_DIM) {
-        width = Math.round((width * MAX_DIM) / height);
-        height = MAX_DIM;
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d', { alpha: false });
-      ctx.imageSmoothingQuality = 'medium';
-      ctx.drawImage(bitmap, 0, 0, width, height);
-      bitmap.close();
-
-      return new Promise((resolve) => {
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(compressed);
-            } else {
-              resolve(imageFile);
-            }
-          },
-          'image/jpeg',
-          0.82
-        );
-      });
-    }
-  } catch (e) {
-    console.warn('createImageBitmap fast path fallback:', e);
-  }
-
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX_DIM = 1400;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height && width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
-        } else if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(compressed);
-            } else {
-              resolve(imageFile);
-            }
-          },
-          'image/jpeg',
-          0.82
-        );
-      };
-      img.onerror = () => resolve(imageFile);
-      img.src = e.target.result;
-    };
-    reader.onerror = () => resolve(imageFile);
-    reader.readAsDataURL(imageFile);
-  });
-};
-
   const handleFileSelect = (e) => {
-    const selected = e.target.files[0];
+    if (scanning) return;
+    const selected = e.target.files?.[0];
     if (selected) {
       setFile(selected);
+      setOcrError(null);
       setPreviewUrl(URL.createObjectURL(selected));
-      // Auto-trigger instant OCR scan on mobile photo capture
       handleRunOcr(selected);
     }
   };
 
   const handleRunOcr = async (fileToProcess = null) => {
+    if (scanning) return; // Prevent duplicate concurrent scans
     const activeFile = fileToProcess || file;
     if (!activeFile) {
       addToast('Please photograph or select a bill image first', 'error');
@@ -162,20 +73,28 @@ const compressImageFile = async (imageFile) => {
     }
 
     setScanning(true);
-    try {
-      const optimizedFile = await compressImageFile(activeFile);
-      const formData = new FormData();
-      formData.append('businessId', activeBusinessId);
-      formData.append('locationId', activeLocationId && activeLocationId !== 'ALL' ? activeLocationId : '');
-      formData.append('billFile', optimizedFile);
+    setOcrError(null);
 
-      const res = await fetch('/api/purchases/scan', {
-        method: 'POST',
-        body: formData,
+    try {
+      // 1. Compress mobile camera photo (from 12MB down to ~300KB)
+      setOcrProgress({ status: 'UPLOADING', step: 1, message: 'Uploading...', percent: 15 });
+      const optimizedFile = await compressMobileBillImage(activeFile);
+
+      // 2. Submit non-blocking async job & poll status
+      const data = await submitAndPollOcrJob({
+        jobUrl: '/api/purchases/scan-job',
+        fallbackSyncUrl: '/api/purchases/scan',
+        file: optimizedFile,
+        formDataFields: {
+          businessId: activeBusinessId,
+          locationId: activeLocationId && activeLocationId !== 'ALL' ? activeLocationId : '',
+        },
+        onProgress: (prog) => {
+          setOcrProgress(prog);
+        },
       });
 
-      if (res.ok) {
-        const data = await res.json();
+      if (data && (data.items || data.supplier)) {
         setSupplierName(data.supplier?.matchedSupplierName || data.supplier?.extractedName || 'Wholesale Mobile Supplier');
         setInvoiceNumber(data.invoiceNumber || `BILL-${Math.floor(1000 + Math.random() * 9000)}`);
         setInvoiceDate(data.invoiceDate || new Date().toISOString().split('T')[0]);
@@ -194,11 +113,13 @@ const compressImageFile = async (imageFile) => {
         setStep('review');
         addToast(`Real OCR complete: ${data.items?.length || 0} line items extracted!`, 'success');
       } else {
-        addToast('Failed to process bill OCR. Please ensure the bill is well-lit.', 'error');
+        throw new Error('OCR failed — Retry');
       }
     } catch (err) {
       console.error('OCR Error:', err);
-      addToast('Error during document scanning pipeline', 'error');
+      const errMsg = err.message || 'OCR failed — Retry';
+      setOcrError(errMsg);
+      addToast(errMsg, 'error');
     } finally {
       setScanning(false);
     }
@@ -342,7 +263,7 @@ const compressImageFile = async (imageFile) => {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2">
+          <div className={`flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-2 ${scanning ? 'opacity-40 pointer-events-none' : ''}`}>
             {/* Phone Camera Button */}
             <label className="btn-primary py-2.5 px-4 cursor-pointer">
               <Camera className="w-4 h-4" />
@@ -351,6 +272,7 @@ const compressImageFile = async (imageFile) => {
                 type="file"
                 accept="image/*"
                 capture="environment"
+                disabled={scanning}
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -363,6 +285,7 @@ const compressImageFile = async (imageFile) => {
               <input
                 type="file"
                 accept="image/*,.pdf"
+                disabled={scanning}
                 onChange={handleFileSelect}
                 className="hidden"
               />
@@ -370,15 +293,26 @@ const compressImageFile = async (imageFile) => {
           </div>
 
           {file && (
-            <div className="pt-2">
-              <button
-                onClick={handleRunOcr}
-                disabled={scanning}
-                className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
-              >
-                {scanning ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                <span>{scanning ? 'Extracting Products & Quantities...' : 'Extract Bill Data via AI'}</span>
-              </button>
+            <div className="pt-2 space-y-3">
+              {(scanning || ocrError) && (
+                <OcrScanProgress
+                  progress={ocrProgress}
+                  error={ocrError}
+                  onRetry={() => handleRunOcr()}
+                />
+              )}
+
+              {!scanning && (
+                <button
+                  type="button"
+                  onClick={() => handleRunOcr()}
+                  disabled={scanning}
+                  className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  <span>{ocrError ? 'Retry AI Bill Extraction' : 'Extract Bill Data via AI'}</span>
+                </button>
+              )}
             </div>
           )}
         </div>

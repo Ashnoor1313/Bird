@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/prisma.js';
 import bcrypt from 'bcryptjs';
 import { StockEngine } from '../src/services/StockEngine.js';
-
-const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Seeding BIRD Database with Master Catalog & Store Isolation...');

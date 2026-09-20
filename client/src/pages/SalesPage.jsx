@@ -29,6 +29,8 @@ import {
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CustomerSelector } from '../components/common/CustomerSelector';
 import { InvoiceModal } from '../components/modals/InvoiceModal';
+import { compressMobileBillImage, submitAndPollOcrJob } from '../utils/ocrMobileHelper';
+import { OcrScanProgress } from '../components/common/OcrScanProgress';
 
 import { useSalesData } from '../hooks/useApiQueries';
 import { useDebounce } from '../hooks/useDebounce';
@@ -47,6 +49,8 @@ export const SalesPage = () => {
   const debouncedSearch = useDebounce(searchQuery, 250);
   const [showMakeBillModal, setShowMakeBillModal] = useState(searchParams.get('action') === 'new');
   const [ocrScanningModal, setOcrScanningModal] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ status: 'IDLE', step: 1, message: 'Uploading...', percent: 0 });
+  const [ocrError, setOcrError] = useState(null);
 
   // Selected Invoice Modal (for viewing/printing clean basic invoice)
   const [selectedInvoiceForModal, setSelectedInvoiceForModal] = useState(null);
@@ -169,170 +173,72 @@ export const SalesPage = () => {
     }
   };
 
-  // Ultra-fast client-side GPU image compressor (resizes 40MP camera photo to ~100KB in ~10ms for instant mobile OCR)
-  const compressImageFile = async (imageFile) => {
-    if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
-    try {
-      if ('createImageBitmap' in window) {
-        const bitmap = await createImageBitmap(imageFile);
-        const MAX_DIM = 1400;
-        let width = bitmap.width;
-        let height = bitmap.height;
-
-        if (width > height && width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
-        } else if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d', { alpha: false });
-        ctx.imageSmoothingQuality = 'medium';
-        ctx.drawImage(bitmap, 0, 0, width, height);
-        bitmap.close();
-
-        return new Promise((resolve) => {
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                });
-                resolve(compressed);
-              } else {
-                resolve(imageFile);
-              }
-            },
-            'image/jpeg',
-            0.82
-          );
-        });
-      }
-    } catch (e) {
-      console.warn('createImageBitmap fast path fallback:', e);
-    }
-
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const MAX_DIM = 1400;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height && width > MAX_DIM) {
-            height = Math.round((height * MAX_DIM) / width);
-            width = MAX_DIM;
-          } else if (height > MAX_DIM) {
-            width = Math.round((width * MAX_DIM) / height);
-            height = MAX_DIM;
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                });
-                resolve(compressed);
-              } else {
-                resolve(imageFile);
-              }
-            },
-            'image/jpeg',
-            0.82
-          );
-        };
-        img.onerror = () => resolve(imageFile);
-        img.src = e.target.result;
-      };
-      reader.onerror = () => resolve(imageFile);
-      reader.readAsDataURL(imageFile);
-    });
-  };
-
   // Auto-Fill Invoice from Photo / Paper Slip
   const handleScanBillImageForModal = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
+    if (ocrScanningModal) return;
 
     setOcrScanningModal(true);
-    try {
-      const optimizedFile = await compressImageFile(file);
-      const formData = new FormData();
-      formData.append('businessId', activeBusinessId);
-      formData.append('categoryId', billingCategoryId);
-      formData.append('billFile', optimizedFile);
+    setOcrError(null);
 
-      const res = await fetch('/api/sales/scan', {
-        method: 'POST',
-        body: formData,
+    try {
+      const data = await submitAndPollOcrJob({
+        file,
+        jobUrl: '/api/sales/scan-job',
+        businessId: activeBusinessId,
+        locationId: billingLocationId || '',
+        onProgress: setOcrProgress,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.customerName) {
-          setCustomerSearch(data.customerName);
-          const matchedCust = customers.find(c =>
-            c.name.toLowerCase().includes(data.customerName.toLowerCase()) ||
-            (data.customerPhone && c.phone && c.phone.includes(data.customerPhone))
-          );
-          if (matchedCust) {
-            setSelectedCustomer(matchedCust);
-          }
+      if (data.customerName) {
+        setCustomerSearch(data.customerName);
+        const matchedCust = customers.find(c =>
+          c.name.toLowerCase().includes(data.customerName.toLowerCase()) ||
+          (data.customerPhone && c.phone && c.phone.includes(data.customerPhone))
+        );
+        if (matchedCust) {
+          setSelectedCustomer(matchedCust);
         }
-        if (data.customerPhone && !customerPhone) {
-          setCustomerPhone(data.customerPhone);
-        }
+      }
+      if (data.customerPhone && !customerPhone) {
+        setCustomerPhone(data.customerPhone);
+      }
 
-        if (data.items && data.items.length > 0) {
-          const autoFilledItems = data.items.map(item => {
-            const matchedProd = item.matchedProduct || (item.matchedProductId
-              ? products.find(p => p.id === item.matchedProductId)
-              : products.find(p =>
-                  p.name?.toLowerCase().trim() === item.productName?.toLowerCase().trim() ||
-                  (p.model && p.model.toLowerCase().trim() === item.productName?.toLowerCase().trim()) ||
-                  (p.itemCode && p.itemCode.toLowerCase().trim() === item.productName?.toLowerCase().trim())
-                ));
+      if (data.items && data.items.length > 0) {
+        const autoFilledItems = data.items.map(item => {
+          const matchedProd = item.matchedProduct || (item.matchedProductId
+            ? products.find(p => p.id === item.matchedProductId)
+            : products.find(p =>
+                p.name?.toLowerCase().trim() === item.productName?.toLowerCase().trim() ||
+                (p.model && p.model.toLowerCase().trim() === item.productName?.toLowerCase().trim()) ||
+                (p.itemCode && p.itemCode.toLowerCase().trim() === item.productName?.toLowerCase().trim())
+              ));
 
-            const resolvedUnitPrice = item.unitPrice > 0
-              ? item.unitPrice
-              : (matchedProd?.sellingPrice || 0);
+          const resolvedUnitPrice = item.unitPrice > 0
+            ? item.unitPrice
+            : (matchedProd?.sellingPrice || 0);
 
-            return {
-              productId: matchedProd?.id || null,
-              productName: item.productName || matchedProd?.name || 'Mobile Part',
-              model: matchedProd?.model || '',
-              quantity: item.quantity || 1,
-              unitPrice: resolvedUnitPrice,
-              purchasePrice: matchedProd?.purchasePrice || 0,
-              gstPercentage: 0,
-            };
-          });
-          setBillItems(autoFilledItems);
-          addToast(`✨ Auto-filled ${autoFilledItems.length} items & customer details from document!`, 'success');
-        } else {
-          addToast('Document scanned, but no clear line items detected. Please ensure image/PDF is readable.', 'info');
-        }
+          return {
+            productId: matchedProd?.id || null,
+            productName: item.productName || matchedProd?.name || 'Mobile Part',
+            model: matchedProd?.model || '',
+            quantity: item.quantity || 1,
+            unitPrice: resolvedUnitPrice,
+            purchasePrice: matchedProd?.purchasePrice || 0,
+            gstPercentage: 0,
+          };
+        });
+        setBillItems(autoFilledItems);
+        addToast(`✨ Auto-filled ${autoFilledItems.length} items & customer details from document!`, 'success');
       } else {
-        addToast('Failed to parse document file', 'error');
+        addToast('Document scanned, but no clear line items detected. Please ensure image/PDF is readable.', 'info');
       }
     } catch (err) {
       console.error('OCR Error:', err);
-      addToast('Error reading document file', 'error');
+      const errMsg = err.message || 'OCR failed — Retry';
+      setOcrError(errMsg);
+      addToast(errMsg, 'error');
     } finally {
       setOcrScanningModal(false);
       e.target.value = '';
@@ -716,52 +622,54 @@ export const SalesPage = () => {
               </div>
 
               {/* OCR AUTO-FILL BANNER */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3.5 rounded-xl border border-blue-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-                    <Sparkles className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-zinc-900 text-xs sm:text-sm">Auto-Fill Bill from Photo / Paper Slip</div>
-                    <div className="text-[11px] text-zinc-500 font-medium">Upload a photo of a customer slip or bill to auto-read items, prices & customer name.</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  {ocrScanningModal ? (
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-md">
-                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                      <span>Scanning Document...</span>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3.5 rounded-xl border border-blue-200 flex flex-col gap-3">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+                      <Sparkles className="w-5 h-5" />
                     </div>
-                  ) : (
-                    <>
-                      <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 cursor-pointer transition-all active:scale-95">
-                        <Camera className="w-4 h-4" />
-                        <span>Snap Photo</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          onChange={handleScanBillImageForModal}
-                          className="hidden"
-                          disabled={ocrScanningModal}
-                        />
-                      </label>
+                    <div>
+                      <div className="font-bold text-zinc-900 text-xs sm:text-sm">Auto-Fill Bill from Photo / Paper Slip</div>
+                      <div className="text-[11px] text-zinc-500 font-medium">Upload a photo of a customer slip or bill to auto-read items, prices & customer name.</div>
+                    </div>
+                  </div>
 
-                      <label className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs shadow-md cursor-pointer transition-all active:scale-95">
-                        <Upload className="w-4 h-4 text-zinc-300" />
-                        <span>Upload File</span>
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={handleScanBillImageForModal}
-                          className="hidden"
-                          disabled={ocrScanningModal}
-                        />
-                      </label>
-                    </>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <label className={`flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 cursor-pointer transition-all active:scale-95 ${ocrScanningModal ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <Camera className="w-4 h-4" />
+                      <span>Snap Photo</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleScanBillImageForModal}
+                        className="hidden"
+                        disabled={ocrScanningModal}
+                      />
+                    </label>
+
+                    <label className={`flex items-center gap-1.5 px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs shadow-md cursor-pointer transition-all active:scale-95 ${ocrScanningModal ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <Upload className="w-4 h-4 text-zinc-300" />
+                      <span>Upload File</span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        onChange={handleScanBillImageForModal}
+                        className="hidden"
+                        disabled={ocrScanningModal}
+                      />
+                    </label>
+                  </div>
                 </div>
+
+                {(ocrScanningModal || ocrError) && (
+                  <div className="pt-1">
+                    <OcrScanProgress
+                      progress={ocrProgress}
+                      error={ocrError}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Step 1: Customer Selection */}

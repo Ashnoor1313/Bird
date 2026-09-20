@@ -28,5 +28,5 @@ COPY --from=builder /app/client/dist ./client/dist
 
 EXPOSE 5000
 
-# Push schema automatically on startup so PostgreSQL tables are always created
-CMD ["sh", "-c", "cd server && npx prisma db push --accept-data-loss && node src/app.js"]
+# Migrate schema automatically on startup (Turso Cloud libSQL or local fallback) then start server
+CMD ["sh", "-c", "cd server && node src/migrate-turso.js && node src/app.js"]

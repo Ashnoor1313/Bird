@@ -7,21 +7,52 @@ import { GoogleGenAI } from '@google/genai';
 import { ImageProcessor } from './ImageProcessor.js';
 import { ProductNormalizer } from './ProductNormalizer.js';
 
+let cachedWorkerPromise = null;
+
+export const getTesseractWorker = async () => {
+  if (!cachedWorkerPromise) {
+    const t = tesseractPkg.default || tesseractPkg;
+    const candidates = [
+      path.resolve(process.cwd(), 'server'),
+      path.resolve(process.cwd()),
+      path.resolve('server'),
+      path.resolve('.'),
+    ];
+    const foundLangDir = candidates.find(dir => fs.existsSync(path.join(dir, 'eng.traineddata'))) || '.';
+
+    cachedWorkerPromise = t.createWorker('eng', 1, {
+      langPath: foundLangDir,
+      cachePath: foundLangDir,
+      gzip: false,
+    }).catch(err => {
+      console.warn('Worker init failed, resetting worker promise:', err.message);
+      cachedWorkerPromise = null;
+      throw err;
+    });
+  }
+  return await cachedWorkerPromise;
+};
+
 /**
  * Tesseract ESM compatibility helper with Production Cloud /tmp caching & worker resiliency
  */
 export const recognizeOCR = async (imagePath, lang = 'eng', options = {}) => {
-  const t = tesseractPkg.default || tesseractPkg;
-  const fn = t.recognize || (typeof t === 'function' ? t : null);
-  if (typeof fn === 'function') {
-    const prodOptions = {
-      cachePath: os.tmpdir(),
-      gzip: true,
-      ...options,
-    };
-    return await fn(imagePath, lang, prodOptions);
+  try {
+    const worker = await getTesseractWorker();
+    return await worker.recognize(imagePath, options);
+  } catch (wErr) {
+    const t = tesseractPkg.default || tesseractPkg;
+    const fn = t.recognize || (typeof t === 'function' ? t : null);
+    if (typeof fn === 'function') {
+      const prodOptions = {
+        cachePath: os.tmpdir(),
+        gzip: true,
+        ...options,
+      };
+      return await fn(imagePath, lang, prodOptions);
+    }
+    throw new Error('Tesseract OCR recognize engine function unavailable');
   }
-  throw new Error('Tesseract OCR recognize engine function unavailable');
 };
 
 /**
@@ -30,7 +61,8 @@ export const recognizeOCR = async (imagePath, lang = 'eng', options = {}) => {
 export function isValidGeminiApiKey(key) {
   if (!key || typeof key !== 'string') return false;
   const trimmed = key.trim();
-  return trimmed.length >= 10 && !trimmed.includes('YOUR_API_KEY') && !trimmed.includes('your_key_here');
+  if (trimmed.includes('YOUR_API_KEY') || trimmed.includes('your_key_here')) return false;
+  return trimmed.length >= 10;
 }
 
 /**
@@ -131,57 +163,12 @@ Rules for mobile spare-parts accuracy:
       const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
       let extractedText = null;
 
-      // STRATEGY 1: Native REST API with strict application/json response
-      for (const modelName of modelsToTry) {
-        try {
-          const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
-          const restPayload = {
-            contents: [
-              {
-                parts: [
-                  { text: prompt },
-                  {
-                    inline_data: {
-                      mime_type: targetMimeType,
-                      data: base64Data,
-                    },
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.1,
-              response_mime_type: 'application/json',
-            },
-          };
-
-          const restRes = await fetch(restUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(restPayload),
-          });
-
-          if (restRes.ok) {
-            const data = await restRes.json();
-            const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (candidateText) {
-              extractedText = candidateText;
-              break;
-            }
-          } else {
-            const errData = await restRes.text();
-            console.warn(`Gemini REST model ${modelName} returned status ${restRes.status}:`, errData.slice(0, 150));
-          }
-        } catch (rErr) {
-          console.warn(`Gemini REST request for ${modelName} notice:`, rErr.message);
-        }
-      }
-
-      // STRATEGY 2: @google/genai SDK fallback if REST did not return
-      if (!extractedText && this.ai) {
+      // STRATEGY 1: @google/genai SDK (Primary, handles both Cloud & AI Studio tokens)
+      if (this.ai) {
         for (const modelName of modelsToTry) {
           try {
-            const response = await this.ai.models.generateContent({
+            console.log(`🤖 Trying Gemini model via SDK: ${modelName}...`);
+            const sdkPromise = this.ai.models.generateContent({
               model: modelName,
               contents: [
                 {
@@ -193,12 +180,66 @@ Rules for mobile spare-parts accuracy:
                 prompt,
               ],
             });
+            const timeoutPromise = new Promise((_, reject) =>
+              setTimeout(() => reject(new Error(`SDK call timed out for ${modelName}`)), 20000)
+            );
+            const response = await Promise.race([sdkPromise, timeoutPromise]);
             if (response && response.text) {
               extractedText = response.text;
+              console.log(`✅ Gemini model ${modelName} extracted text successfully`);
               break;
             }
           } catch (mErr) {
             console.warn(`Gemini SDK model ${modelName} notice:`, mErr.message);
+          }
+        }
+      }
+
+      // STRATEGY 2: Native REST API fallback with 15s timeout
+      if (!extractedText) {
+        for (const modelName of modelsToTry) {
+          try {
+            const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${this.apiKey}`;
+            const restPayload = {
+              contents: [
+                {
+                  parts: [
+                    { text: prompt },
+                    {
+                      inline_data: {
+                        mime_type: targetMimeType,
+                        data: base64Data,
+                      },
+                    },
+                  ],
+                },
+              ],
+              generationConfig: {
+                temperature: 0.1,
+                response_mime_type: 'application/json',
+              },
+            };
+
+            const restRes = await fetch(restUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(restPayload),
+              signal: AbortSignal.timeout(15000),
+            });
+
+            if (restRes.ok) {
+              const data = await restRes.json();
+              const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (candidateText) {
+                extractedText = candidateText;
+                break;
+              }
+            } else {
+              const errData = await restRes.text();
+              console.warn(`Gemini REST model ${modelName} returned status ${restRes.status}:`, errData.slice(0, 150));
+            }
+          } catch (rErr) {
+            console.warn(`Gemini REST request for ${modelName} notice:`, rErr.message);
           }
         }
       }

@@ -18,6 +18,7 @@ import reportRoutes from './routes/reports.js';
 import importRoutes from './routes/imports.js';
 import ordersRoutes from './routes/orders.js';
 import locationRoutes from './routes/locations.js';
+import ocrRoutes from './routes/ocr.js';
 
 dotenv.config();
 
@@ -91,6 +92,7 @@ app.use('/api/money', moneyRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/imports', importRoutes);
 app.use('/api/orders', ordersRoutes);
+app.use('/api/ocr', ocrRoutes);
 
 // =============================================================================
 // SERVE PRODUCTION CLIENT SPA (For 1-Command Deployment on Cloud / VPS)
@@ -151,6 +153,11 @@ server.headersTimeout = 66000;
 // Ensure baseline Business, Locations & Categories exist on fresh database & WIPE dummy data for clean start
 async function initBaselineData() {
   try {
+    if (process.env.TURSO_DATABASE_URL) {
+      const { migrateTursoSchema } = await import('./migrate-turso.js');
+      await migrateTursoSchema();
+    }
+
     const prisma = (await import('./prisma.js')).default;
     let business = await prisma.business.findFirst();
     if (!business) {

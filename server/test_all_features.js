@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from './src/prisma.js';
 const API_URL = 'http://localhost:5000/api';
 
 async function testAllFeatures() {

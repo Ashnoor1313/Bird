@@ -17,6 +17,8 @@ import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
 import { useToast } from '../../context/ToastContext';
 import { useQueryClient } from '@tanstack/react-query';
+import { compressMobileBillImage, submitAndPollOcrJob } from '../../utils/ocrMobileHelper';
+import { OcrScanProgress } from '../common/OcrScanProgress';
 
 export const CategoryScanStockModal = ({
   isOpen,
@@ -33,6 +35,8 @@ export const CategoryScanStockModal = ({
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState({ status: 'IDLE', step: 1, message: 'Uploading...', percent: 0 });
+  const [ocrError, setOcrError] = useState(null);
   const [step, setStep] = useState('upload'); // 'upload' | 'review' | 'saving'
 
   const [supplierName, setSupplierName] = useState('');
@@ -49,106 +53,13 @@ export const CategoryScanStockModal = ({
   const targetLocationId = targetLocation?.id;
   const targetLocationName = targetLocation?.name || 'Godown';
 
-  // Ultra-fast client-side GPU image compressor (resizes 40MP camera photo to ~100KB in ~10ms for instant mobile OCR)
-  const compressImageFile = async (imageFile) => {
-    if (!imageFile || !imageFile.type.startsWith('image/')) return imageFile;
-    try {
-      if ('createImageBitmap' in window) {
-        const bitmap = await createImageBitmap(imageFile);
-        const MAX_DIM = 1400;
-        let width = bitmap.width;
-        let height = bitmap.height;
-
-        if (width > height && width > MAX_DIM) {
-          height = Math.round((height * MAX_DIM) / width);
-          width = MAX_DIM;
-        } else if (height > MAX_DIM) {
-          width = Math.round((width * MAX_DIM) / height);
-          height = MAX_DIM;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d', { alpha: false });
-        ctx.imageSmoothingQuality = 'medium';
-        ctx.drawImage(bitmap, 0, 0, width, height);
-        bitmap.close();
-
-        return new Promise((resolve) => {
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                });
-                resolve(compressed);
-              } else {
-                resolve(imageFile);
-              }
-            },
-            'image/jpeg',
-            0.82
-          );
-        });
-      }
-    } catch (e) {
-      console.warn('createImageBitmap fast path fallback:', e);
-    }
-
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          const MAX_DIM = 1400;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height && width > MAX_DIM) {
-            height = Math.round((height * MAX_DIM) / width);
-            width = MAX_DIM;
-          } else if (height > MAX_DIM) {
-            width = Math.round((width * MAX_DIM) / height);
-            height = MAX_DIM;
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const compressed = new File([blob], imageFile.name.replace(/\.[^/.]+$/, '.jpg'), {
-                  type: 'image/jpeg',
-                  lastModified: Date.now(),
-                });
-                resolve(compressed);
-              } else {
-                resolve(imageFile);
-              }
-            },
-            'image/jpeg',
-            0.82
-          );
-        };
-        img.onerror = () => resolve(imageFile);
-        img.src = e.target.result;
-      };
-      reader.onerror = () => resolve(imageFile);
-      reader.readAsDataURL(imageFile);
-    });
-  };
-
   const handleFileChange = async (e) => {
     const selected = e.target.files[0];
     if (selected) {
+      if (scanning) return;
       setFile(selected);
       setPreviewUrl(URL.createObjectURL(selected));
+      setOcrError(null);
       // Auto-trigger instant OCR scan for mobile camera photo capture
       handleRunOcr(selected);
     }
@@ -160,67 +71,64 @@ export const CategoryScanStockModal = ({
       addToast('Please upload or snap a photo of your stock sheet/bill first', 'error');
       return;
     }
+    if (scanning) return; // Prevent duplicate rapid clicks
 
     setScanning(true);
-    try {
-      const optimizedFile = await compressImageFile(activeFile);
-      const formData = new FormData();
-      formData.append('businessId', activeBusinessId);
-      formData.append('locationId', targetLocationId || '');
-      formData.append('billFile', optimizedFile);
+    setOcrError(null);
 
-      const res = await fetch('/api/purchases/scan', {
-        method: 'POST',
-        body: formData,
+    try {
+      const data = await submitAndPollOcrJob({
+        file: activeFile,
+        jobUrl: '/api/purchases/scan-job',
+        businessId: activeBusinessId,
+        locationId: targetLocationId || '',
+        onProgress: setOcrProgress,
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setSupplierName(data.supplier?.matchedSupplierName || data.supplier?.extractedName || 'Wholesale Supplier');
-        setInvoiceNumber(data.invoiceNumber || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`);
-        setConfidence(data.confidence?.overall || 88);
+      setSupplierName(data.supplier?.matchedSupplierName || data.supplier?.extractedName || 'Wholesale Supplier');
+      setInvoiceNumber(data.invoiceNumber || `STOCK-${Math.floor(1000 + Math.random() * 9000)}`);
+      setConfidence(data.confidence?.overall || 88);
 
-        // Pre-process items for this category with both Buy Price & Selling Price
-        const rawItems = (data.items || []).map((item) => {
-          const isExisting = Boolean(item.matchedProductId);
-          const buyPrice = parseFloat(item.unitPrice || 0);
-          const sellPrice = item.matchedProduct?.sellingPrice || (buyPrice > 0 ? Math.round(buyPrice * 1.25) : 0);
-          return {
-            productName: item.productName || 'Spare Part Item',
-            model: item.matchedProduct?.model || item.productName || '',
-            quality: item.matchedProduct?.quality || 'OEM',
-            quantity: parseInt(item.quantity, 10) || 1,
-            unitPrice: buyPrice,
-            sellingPrice: sellPrice,
-            matchedProductId: item.matchedProductId || null,
-            matchedProduct: item.matchedProduct || null,
-            isExisting,
-          };
+      // Pre-process items for this category with both Buy Price & Selling Price
+      const rawItems = (data.items || []).map((item) => {
+        const isExisting = Boolean(item.matchedProductId);
+        const buyPrice = parseFloat(item.unitPrice || 0);
+        const sellPrice = item.matchedProduct?.sellingPrice || (buyPrice > 0 ? Math.round(buyPrice * 1.25) : 0);
+        return {
+          productName: item.productName || 'Spare Part Item',
+          model: item.matchedProduct?.model || item.productName || '',
+          quality: item.matchedProduct?.quality || 'OEM',
+          quantity: parseInt(item.quantity, 10) || 1,
+          unitPrice: buyPrice,
+          sellingPrice: sellPrice,
+          matchedProductId: item.matchedProductId || null,
+          matchedProduct: item.matchedProduct || null,
+          isExisting,
+        };
+      });
+
+      if (rawItems.length === 0) {
+        rawItems.push({
+          productName: `${category === 'Batteries' ? 'Battery' : 'Folder'} Item 1`,
+          model: '',
+          quality: 'OEM',
+          quantity: 10,
+          unitPrice: 0,
+          sellingPrice: 0,
+          matchedProductId: null,
+          matchedProduct: null,
+          isExisting: false,
         });
-
-        if (rawItems.length === 0) {
-          rawItems.push({
-            productName: `${category === 'Batteries' ? 'Battery' : 'Folder'} Item 1`,
-            model: '',
-            quality: 'OEM',
-            quantity: 10,
-            unitPrice: 0,
-            sellingPrice: 0,
-            matchedProductId: null,
-            matchedProduct: null,
-            isExisting: false,
-          });
-        }
-
-        setItems(rawItems);
-        setStep('review');
-        addToast(`Extracted ${rawItems.length} items with quantities & rates!`, 'success');
-      } else {
-        addToast('Failed to parse document. Please ensure the image is clear.', 'error');
       }
+
+      setItems(rawItems);
+      setStep('review');
+      addToast(`Extracted ${rawItems.length} items with quantities & rates!`, 'success');
     } catch (err) {
       console.error('OCR Error:', err);
-      addToast('Error during document OCR processing', 'error');
+      const errMsg = err.message || 'OCR failed — Retry';
+      setOcrError(errMsg);
+      addToast(errMsg, 'error');
     } finally {
       setScanning(false);
     }
@@ -442,7 +350,7 @@ export const CategoryScanStockModal = ({
                       </p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                    <div className={`flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 ${scanning ? 'opacity-40 pointer-events-none' : ''}`}>
                       <label className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95">
                         <Camera className="w-4 h-4" />
                         <span>Snap Photo (Camera)</span>
@@ -450,6 +358,7 @@ export const CategoryScanStockModal = ({
                           type="file"
                           accept="image/*"
                           capture="environment"
+                          disabled={scanning}
                           onChange={handleFileChange}
                           className="hidden"
                         />
@@ -461,6 +370,7 @@ export const CategoryScanStockModal = ({
                         <input
                           type="file"
                           accept="image/*,.pdf"
+                          disabled={scanning}
                           onChange={handleFileChange}
                           className="hidden"
                         />
@@ -470,35 +380,38 @@ export const CategoryScanStockModal = ({
                 )}
               </div>
 
+              {(scanning || ocrError) && (
+                <div className="pt-2">
+                  <OcrScanProgress
+                    progress={ocrProgress}
+                    error={ocrError}
+                    onRetry={() => handleRunOcr()}
+                  />
+                </div>
+              )}
+
               {previewUrl && (
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button
                     type="button"
+                    disabled={scanning}
                     onClick={() => {
                       setFile(null);
                       setPreviewUrl(null);
+                      setOcrError(null);
                     }}
-                    className="btn-secondary py-2.5 px-4 text-xs font-bold"
+                    className="btn-secondary py-2.5 px-4 text-xs font-bold disabled:opacity-50"
                   >
                     Clear
                   </button>
                   <button
                     type="button"
                     disabled={scanning}
-                    onClick={handleRunOcr}
-                    className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2 shadow-md"
+                    onClick={() => handleRunOcr()}
+                    className="btn-primary py-2.5 px-5 text-xs font-bold flex items-center gap-2 shadow-md disabled:opacity-50"
                   >
-                    {scanning ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
-                        <span>Running AI OCR (1-2s)...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 text-emerald-400" />
-                        <span>Extract Stock & Rates</span>
-                      </>
-                    )}
+                    <Upload className="w-4 h-4 text-emerald-400" />
+                    <span>{ocrError ? 'Retry AI OCR' : 'Extract Stock & Rates'}</span>
                   </button>
                 </div>
               )}

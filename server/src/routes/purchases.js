@@ -11,6 +11,7 @@ import { DocumentAIOrchestrator } from '../services/DocumentAIProvider.js';
 import { SupplierMatcher } from '../services/SupplierMatcher.js';
 import { InvoiceValidator } from '../services/InvoiceValidator.js';
 import { ProductNormalizer } from '../services/ProductNormalizer.js';
+import { OcrJobService } from '../services/OcrJobService.js';
 
 import os from 'os';
 import fs from 'fs';
@@ -74,6 +75,27 @@ router.get('/', async (req, res) => {
     res.json(purchases);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch purchases' });
+  }
+});
+
+// ASYNC SCAN JOB CREATION (Instant return for mobile devices)
+router.post('/scan-job', upload.single('billFile'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Bill file/image is required' });
+    }
+    const job = OcrJobService.createJob(req.file, { ...req.body, type: 'PURCHASE' });
+    res.status(202).json({
+      success: true,
+      jobId: job.id,
+      status: job.status,
+      step: job.step,
+      percent: job.percent,
+      message: job.message,
+    });
+  } catch (err) {
+    console.error('Scan job creation error:', err);
+    res.status(500).json({ error: 'Failed to create scan job' });
   }
 });
 

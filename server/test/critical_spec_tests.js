@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../src/prisma.js';
 import { StockEngine } from '../src/services/StockEngine.js';
 import { LedgerEngine } from '../src/services/LedgerEngine.js';
-
-const prisma = new PrismaClient();
 
 async function runCriticalSpecTests() {
   console.log('🧪 ========================================================');
