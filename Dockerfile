@@ -2,6 +2,9 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
+# Install OpenSSL and CA certificates required by Prisma
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
 # Install client dependencies and build
 COPY client/package*.json ./client/
 RUN cd client && npm install
