@@ -5,15 +5,14 @@ export const SplashScreen = ({ onFinish }) => {
   const [stage, setStage] = useState('enter'); // 'enter' | 'active' | 'exit'
 
   useEffect(() => {
-    // Stage 1: Active display
+    // Snappy high-performance brand entrance
     const activeTimer = setTimeout(() => {
       setStage('exit');
-    }, 1200);
+    }, 300);
 
-    // Stage 2: Exit and complete
     const finishTimer = setTimeout(() => {
       if (onFinish) onFinish();
-    }, 1600);
+    }, 450);
 
     return () => {
       clearTimeout(activeTimer);

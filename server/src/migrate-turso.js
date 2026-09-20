@@ -30,6 +30,19 @@ export async function migrateTursoSchema(customClient = null) {
   });
 
   try {
+    // ⚡ Fast Schema Verification: If main tables already exist in Turso, skip redundant 74-statement DDL loop
+    try {
+      const tableCheck = await client.execute(
+        "SELECT count(*) as count FROM sqlite_master WHERE type='table' AND name IN ('Business', 'Product', 'Sale', 'Location', 'Customer');"
+      );
+      const existingTableCount = tableCheck?.rows?.[0]?.count ?? 0;
+      if (Number(existingTableCount) >= 4) {
+        console.log(`✅ [Turso Migration] Schema already verified (${existingTableCount} core tables active). Fast boot enabled.`);
+        return { success: true, fastBoot: true };
+      }
+    } catch (checkErr) {
+      // If table check fails on a fresh database, continue to full migration
+    }
     // Locate SQL schema file
     const possiblePaths = [
       path.resolve(__dirname, '../prisma/turso_schema.sql'),

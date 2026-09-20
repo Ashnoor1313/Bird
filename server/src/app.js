@@ -124,7 +124,7 @@ if (clientDistPath) {
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('.html')) {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      } else if (filePath.includes('/assets/')) {
+      } else if (/[\\/]assets[\\/]/.test(filePath) || filePath.includes('/assets/')) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
       }
     }
@@ -181,6 +181,16 @@ async function initBaselineData() {
         },
       });
       console.log('✅ Created default business: MI2 Impex');
+    } else {
+      // ⚡ Fast Boot Check: If locations and categories already exist, skip redundant seeding & heavy stock sync
+      const [locCount, catCount] = await Promise.all([
+        prisma.location.count({ where: { businessId: business.id } }),
+        prisma.category.count({ where: { businessId: business.id } }),
+      ]);
+      if (locCount >= 3 && catCount >= 2) {
+        console.log(`✅ Baseline data active (${locCount} locations, ${catCount} categories). Fast boot complete.`);
+        return;
+      }
     }
 
     // Ensure Categories

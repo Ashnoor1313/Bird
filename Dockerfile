@@ -34,5 +34,5 @@ COPY --from=builder /app/client/dist ./client/dist
 
 EXPOSE 5000
 
-# Migrate schema automatically on startup (Turso Cloud libSQL or local fallback) then start server
-CMD ["sh", "-c", "cd server && node src/migrate-turso.js && node src/app.js"]
+# Start server (app.js handles fast-boot schema verification and serving)
+CMD ["sh", "-c", "cd server && node src/app.js"]
