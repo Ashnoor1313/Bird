@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Sparkles, Layers, ShieldCheck } from 'lucide-react';
 
 export const SplashScreen = ({ onFinish }) => {
   const [stage, setStage] = useState('enter'); // 'enter' | 'active' | 'exit'
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
 
   useEffect(() => {
     // Snappy high-performance brand entrance
@@ -11,14 +13,14 @@ export const SplashScreen = ({ onFinish }) => {
     }, 300);
 
     const finishTimer = setTimeout(() => {
-      if (onFinish) onFinish();
+      if (onFinishRef.current) onFinishRef.current();
     }, 450);
 
     return () => {
       clearTimeout(activeTimer);
       clearTimeout(finishTimer);
     };
-  }, [onFinish]);
+  }, []);
 
   return (
     <div

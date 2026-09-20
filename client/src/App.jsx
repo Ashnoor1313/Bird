@@ -42,6 +42,7 @@ import { SplashScreen } from './components/common/SplashScreen';
 function AppLayout() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [quickActionOpen, setQuickActionOpen] = useState(false);
+  const { adminModalOpen, setAdminModalOpen } = useAuth();
   const [showSplash, setShowSplash] = useState(() => {
     // Show splash screen only on initial visit per session
     try {
@@ -51,12 +52,12 @@ function AppLayout() {
     }
   });
 
-  const handleSplashFinish = () => {
+  const handleSplashFinish = React.useCallback(() => {
     try {
       sessionStorage.setItem('mi2_splash_seen', '1');
     } catch {}
     setShowSplash(false);
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans selection:bg-slate-900 selection:text-white relative">
