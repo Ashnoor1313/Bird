@@ -61,6 +61,11 @@ router.get('/dashboard', async (req, res) => {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          billNo: true,
+          customerName: true,
+          customerPhone: true,
+          paymentMethod: true,
+          paidAmount: true,
           createdAt: true,
           total: true,
           subtotal: true,

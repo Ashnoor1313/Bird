@@ -604,12 +604,15 @@ const StoreDashboard = ({ data, activeBusiness, activeLocation, locations, selec
               <tbody className="divide-y divide-zinc-100">
                 {recentBills.map((b) => {
                   const isBattery = b.categoryId && /batter/i.test(b.categoryId);
+                  const displayBillNo = b.billNo || (b.id ? `BILL-${b.id.slice(0, 6).toUpperCase()}` : 'N/A');
+                  const displayCustomer = b.customerName || b.customer?.name || 'Walk-in Customer';
+                  const displayPhone = b.customerPhone || b.customer?.phone || '';
                   return (
                     <tr key={b.id} className="hover:bg-zinc-50/70 transition-colors">
-                      <td className="py-2.5 px-3 font-mono font-bold text-zinc-900">{b.billNo}</td>
+                      <td className="py-2.5 px-3 font-mono font-bold text-zinc-900">{displayBillNo}</td>
                       <td className="py-2.5 px-3">
-                        <div className="font-bold text-zinc-900">{b.customerName}</div>
-                        {b.customerPhone && <div className="text-[10px] text-zinc-400 font-medium">{b.customerPhone}</div>}
+                        <div className="font-bold text-zinc-900">{displayCustomer}</div>
+                        {displayPhone && <div className="text-[10px] text-zinc-400 font-medium">{displayPhone}</div>}
                       </td>
                       <td className="py-2.5 px-3">
                         <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${isBattery ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
