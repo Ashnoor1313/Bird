@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -17,11 +17,14 @@ RUN cd server && npx prisma generate
 
 COPY server/ ./server/
 
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=5000
+
+# Install OpenSSL and CA certificates required by Prisma and HTTPS requests on Debian
+RUN apt-get update -y && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/server ./server
 COPY --from=builder /app/client/dist ./client/dist
