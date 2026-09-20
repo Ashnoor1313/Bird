@@ -22,8 +22,9 @@ export function useDashboardData(businessId, locationId = 'ALL') {
       return fetchJson(`/api/reports/dashboard?businessId=${businessId}${locQuery}`);
     },
     enabled: !!businessId,
-    refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 1000 * 30, // 30s instant cache
+    gcTime: 1000 * 60 * 10,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -39,8 +40,9 @@ export function useCategoryHubData(businessId, categoryName, locationId = 'ALL')
       return fetchJson(`/api/reports/category-hub?businessId=${businessId}&categoryName=${categoryName}${locParam}`);
     },
     enabled: !!businessId && !!categoryName,
-    refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 1000 * 30, // 30s instant cache
+    gcTime: 1000 * 60 * 10,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -62,6 +64,8 @@ export function useCustomersData(businessId, locationId = 'ALL', categoryId = 'A
       return fetchJson(`/api/customers?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -82,6 +86,8 @@ export function useSuppliersData(businessId, locationId = 'ALL', search = '', pa
       return fetchJson(`/api/suppliers?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -103,6 +109,8 @@ export function useSalesData(businessId, locationId = 'ALL', categoryId = 'ALL',
       return fetchJson(`/api/sales?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -124,6 +132,8 @@ export function usePurchasesData(businessId, locationId = 'ALL', categoryId = 'A
       return fetchJson(`/api/purchases?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -140,6 +150,8 @@ export function useMoneyBalancesData(businessId, locationId = 'ALL', categoryId 
       return fetchJson(`/api/money/balances?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -159,6 +171,8 @@ export function useReportsData(businessId, type = 'sales', range = 'month', loca
       return fetchJson(`/api/reports?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }
 
@@ -174,5 +188,7 @@ export function useProfitLossData(businessId, locationId = 'ALL', range = 'month
       return fetchJson(`/api/reports/pnl?${params.toString()}`);
     },
     enabled: !!businessId,
+    staleTime: 1000 * 30,
+    placeholderData: (previousData) => previousData,
   });
 }

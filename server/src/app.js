@@ -1,9 +1,11 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
 import './prisma.js'; // initialize prisma singleton and WAL pragmas
+import { CacheService } from './services/CacheService.js';
 
 import authRoutes from './routes/auth.js';
 import businessRoutes from './routes/business.js';
@@ -42,12 +44,21 @@ if (!fs.existsSync('uploads')) {
 }
 
 // Middleware
+app.use(compression());
 app.use(cors({
   origin: true,
   credentials: true,
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Invalidate read caches on state-mutating requests (POST, PUT, PATCH, DELETE)
+app.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    CacheService.invalidate();
+  }
+  next();
+});
 
 // Static uploads folder
 app.use('/uploads', express.static(path.resolve('uploads')));

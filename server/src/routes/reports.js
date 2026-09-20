@@ -2,6 +2,7 @@ import express from 'express';
 import prisma from '../prisma.js';
 import * as XLSX from 'xlsx';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
+import { CacheService } from '../services/CacheService.js';
 
 const router = express.Router();
 
@@ -12,14 +13,14 @@ router.get('/dashboard', async (req, res) => {
     const { businessId, locationId } = req.query;
     if (!businessId) return res.status(400).json({ error: 'businessId required' });
 
-    // Fetch all active locations for business
-    const locations = await prisma.location.findMany({
-      where: { businessId, status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
-    });
+    // ⚡ Fast Memory Cache Check (instant sub-5ms response for repeat visits)
+    const cacheKey = `dashboard:${businessId}:${locationId || 'ALL'}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
     const isLocationSpecific = locationId && locationId !== 'ALL';
-    const activeLoc = isLocationSpecific ? locations.find(l => l.id === locationId) : null;
 
     // Today's Start
     const todayStart = new Date();
@@ -29,15 +30,87 @@ router.get('/dashboard', async (req, res) => {
     let baseSalesWhere = { businessId };
     if (isLocationSpecific) baseSalesWhere.locationId = locationId;
 
-    // Fetch all sales for this location/business to calculate overall & category metrics
-    const salesList = await prisma.sale.findMany({
-      where: baseSalesWhere,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        customer: { select: { id: true, name: true, phone: true } },
-        _count: { select: { items: true } },
-      },
-    });
+    // Purchases filter
+    let purchasesWhere = { businessId };
+    if (isLocationSpecific) purchasesWhere.receivingLocationId = locationId;
+
+    // Customers filter
+    const customerWhere = isLocationSpecific ? { businessId, locationId } : { businessId };
+
+    // Supplier filter
+    const supplierWhere = isLocationSpecific ? { businessId, locationId } : { businessId };
+
+    // ⚡ Parallel execution of all independent database queries (eliminates waterfall latency)
+    const [
+      locations,
+      salesList,
+      allPurchasesList,
+      totalPurchasesAgg,
+      todayPurchasesAgg,
+      allCustomers,
+      allSuppliers,
+      products,
+      purchaseOrders,
+    ] = await Promise.all([
+      prisma.location.findMany({
+        where: { businessId, status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.sale.findMany({
+        where: baseSalesWhere,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          createdAt: true,
+          total: true,
+          subtotal: true,
+          dueAmount: true,
+          locationId: true,
+          categoryId: true,
+          customer: { select: { id: true, name: true, phone: true } },
+          _count: { select: { items: true } },
+        },
+      }),
+      prisma.purchase.findMany({
+        where: purchasesWhere,
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+      prisma.purchase.aggregate({
+        where: purchasesWhere,
+        _sum: { total: true },
+      }),
+      prisma.purchase.aggregate({
+        where: { ...purchasesWhere, createdAt: { gte: todayStart } },
+        _sum: { total: true },
+      }),
+      prisma.customer.findMany({
+        where: customerWhere,
+        select: { id: true, categoryId: true, moneyToReceive: true },
+      }),
+      prisma.supplier.findMany({
+        where: supplierWhere,
+        select: { id: true, moneyToPay: true },
+      }),
+      prisma.product.findMany({
+        where: { businessId, status: 'ACTIVE' },
+        select: {
+          id: true,
+          name: true,
+          partType: true,
+          currentStock: true,
+          minStock: true,
+          purchasePrice: true,
+          category: { select: { id: true, name: true } },
+        },
+      }),
+      prisma.purchaseOrder.findMany({
+        where: { businessId },
+        include: { items: { select: { quantity: true, receivedQuantity: true } } },
+      }),
+    ]);
+
+    const activeLoc = isLocationSpecific ? locations.find(l => l.id === locationId) : null;
 
     let totalSales = 0;
     let todaySales = 0;
@@ -85,32 +158,6 @@ router.get('/dashboard', async (req, res) => {
       }
     }
 
-    // Purchases filter
-    let purchasesWhere = { businessId };
-    if (isLocationSpecific) purchasesWhere.receivingLocationId = locationId;
-
-    const allPurchasesList = await prisma.purchase.findMany({
-      where: purchasesWhere,
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-    });
-
-    const totalPurchasesAgg = await prisma.purchase.aggregate({
-      where: purchasesWhere,
-      _sum: { total: true },
-    });
-
-    const todayPurchasesAgg = await prisma.purchase.aggregate({
-      where: { ...purchasesWhere, createdAt: { gte: todayStart } },
-      _sum: { total: true },
-    });
-
-    // Customers & Receivables
-    const customerWhere = isLocationSpecific ? { businessId, locationId } : { businessId };
-    const allCustomers = await prisma.customer.findMany({
-      where: customerWhere,
-    });
-
     let moneyToReceive = 0;
     let foldersReceivables = 0;
     let batteriesReceivables = 0;
@@ -125,27 +172,10 @@ router.get('/dashboard', async (req, res) => {
       }
     }
 
-    // Supplier Payables
-    const supplierWhere = isLocationSpecific ? { businessId, locationId } : { businessId };
-    const allSuppliers = await prisma.supplier.findMany({
-      where: supplierWhere,
-    });
-
     let moneyToPay = 0;
     for (const sup of allSuppliers) {
       moneyToPay += (sup.moneyToPay || 0);
     }
-
-    // Fetch Products with Category and Location Stocks
-    const products = await prisma.product.findMany({
-      where: { businessId, status: 'ACTIVE' },
-      include: {
-        category: true,
-        locationStocks: {
-          include: { location: true },
-        },
-      },
-    });
 
     let totalStockValue = 0;
     let totalStockPcs = 0;
@@ -216,18 +246,13 @@ router.get('/dashboard', async (req, res) => {
       }
     }
 
-    // Stock Ordered & Received Metrics
-    const purchaseOrders = await prisma.purchaseOrder.findMany({
-      where: { businessId },
-      include: { items: true },
-    });
-
+    // Stock Ordered & Received Metrics (calculated from parallel purchaseOrders fetch above)
     let stockOrderedPcs = 0;
     let stockReceivedPcs = 0;
     purchaseOrders.forEach(o => {
-      o.items.forEach(i => {
-        stockOrderedPcs += i.quantity;
-        stockReceivedPcs += i.receivedQuantity || 0;
+      o.items?.forEach(i => {
+        stockOrderedPcs += (i.quantity || 0);
+        stockReceivedPcs += (i.receivedQuantity || 0);
       });
     });
 
@@ -255,7 +280,7 @@ router.get('/dashboard', async (req, res) => {
       },
     ];
 
-    res.json({
+    const dashboardPayload = {
       activeLocation: activeLoc,
       locations,
       locationSummaries,
@@ -282,8 +307,8 @@ router.get('/dashboard', async (req, res) => {
       batteriesProductCount,
       batteriesLowStockCount,
       batteriesReceivables,
-      todayPurchases: todayPurchasesAgg._sum.total || 0,
-      totalPurchases: totalPurchasesAgg._sum.total || 0,
+      todayPurchases: todayPurchasesAgg._sum?.total || 0,
+      totalPurchases: totalPurchasesAgg._sum?.total || 0,
       moneyToReceive,
       moneyToPay,
       totalCustomers: allCustomers.length,
@@ -299,7 +324,12 @@ router.get('/dashboard', async (req, res) => {
       recentBills: salesList.slice(0, 8),
       recentPurchases: allPurchasesList,
       lowStockProducts: lowStockProducts.slice(0, 5),
-    });
+    };
+
+    // Cache in memory for 20 seconds to eliminate repeat roundtrips
+    CacheService.set(cacheKey, dashboardPayload, 20000);
+
+    res.json(dashboardPayload);
 
   } catch (err) {
     console.error('Dashboard Overview Error:', err);
@@ -316,10 +346,19 @@ router.get('/category-hub', async (req, res) => {
     const targetCategoryName = categoryName || 'Folders';
     const isLocationSpecific = locationId && locationId !== 'ALL';
 
-    // 1. Find categories
-    const categories = await prisma.category.findMany({
-      where: { businessId },
-    });
+    // ⚡ Fast Memory Cache Check (instant sub-5ms response for repeat visits)
+    const cacheKey = `category-hub:${businessId}:${targetCategoryName}:${locationId || 'ALL'}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // 1. Fetch categories, locations, and all business customers in parallel
+    const [categories, locations, allBusinessCustomers] = await Promise.all([
+      prisma.category.findMany({ where: { businessId } }),
+      prisma.location.findMany({ where: { businessId, status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }),
+      prisma.customer.findMany({ where: { businessId }, orderBy: { name: 'asc' } }),
+    ]);
 
     const isBattery = /batter|cell|mah/i.test(targetCategoryName);
     const matchingCatIds = categories
@@ -359,12 +398,6 @@ router.get('/category-hub', async (req, res) => {
         },
       },
       orderBy: { name: 'asc' },
-    });
-
-    // 3. Fetch all active locations
-    const locations = await prisma.location.findMany({
-      where: { businessId, status: 'ACTIVE' },
-      orderBy: { createdAt: 'asc' },
     });
 
     const activeLoc = isLocationSpecific ? locations.find(l => l.id === locationId) : null;
@@ -503,12 +536,7 @@ router.get('/category-hub', async (req, res) => {
       }
     });
 
-    // Also include all business customers so POS and Customer directory have complete data
-    const allBusinessCustomers = await prisma.customer.findMany({
-      where: { businessId },
-      orderBy: { name: 'asc' },
-    });
-
+    // Merge all business customers (fetched in parallel at start) so POS and Customer directory have complete data
     allBusinessCustomers.forEach(cust => {
       if (!customerMap.has(cust.id)) {
         customerMap.set(cust.id, {
@@ -533,7 +561,7 @@ router.get('/category-hub', async (req, res) => {
     const customerList = Array.from(customerMap.values()).sort((a, b) => b.totalCategorySpend - a.totalCategorySpend || a.name.localeCompare(b.name));
     const customerIds = customerList.map(c => c.id);
 
-    // Fetch Category Customers Payments & Ledgers
+    // Fetch Category Customers Payments & Ledgers concurrently
     let paymentsWhere = {
       businessId,
       customerId: { in: customerIds },
@@ -542,29 +570,26 @@ router.get('/category-hub', async (req, res) => {
       paymentsWhere.locationId = locationId;
     }
 
-    const payments = await prisma.payment.findMany({
-      where: paymentsWhere,
-      include: {
-        customer: true,
-      },
-      orderBy: { date: 'desc' },
-      take: 100,
-    });
+    const [payments, ledgers] = await Promise.all([
+      prisma.payment.findMany({
+        where: paymentsWhere,
+        include: { customer: true },
+        orderBy: { date: 'desc' },
+        take: 100,
+      }),
+      prisma.customerLedger.findMany({
+        where: {
+          businessId,
+          customerId: { in: customerIds },
+          ...(isLocationSpecific ? { locationId } : {}),
+        },
+        include: { customer: true },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+    ]);
 
-    const ledgers = await prisma.customerLedger.findMany({
-      where: {
-        businessId,
-        customerId: { in: customerIds },
-        ...(isLocationSpecific ? { locationId } : {}),
-      },
-      include: {
-        customer: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-
-    res.json({
+    const categoryHubPayload = {
       categoryName: targetCategoryName,
       locationId: locationId || 'ALL',
       locations,
@@ -583,7 +608,12 @@ router.get('/category-hub', async (req, res) => {
       customers: customerList,
       payments,
       ledgers,
-    });
+    };
+
+    // Cache in memory for 20 seconds
+    CacheService.set(cacheKey, categoryHubPayload, 20000);
+
+    res.json(categoryHubPayload);
   } catch (err) {
     console.error('Category Hub Error:', err);
     res.status(500).json({ error: 'Failed to fetch category hub data' });
