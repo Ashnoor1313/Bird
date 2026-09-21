@@ -33,9 +33,7 @@ server/prisma/*.db-journal
 .DS_Store
 Thumbs.db
 
-# AI Voice Reminder (Local testing only - excluded from production deployment)
+# AI Voice Reminder (Local module - excluded from production deployment)
 server/src/services/ai-payment-reminder/
 server/src/routes/aiReminder.js
-server/test/ai_reminder_isolation.test.js
-client/src/pages/AiReminderTestPage.jsx
 
