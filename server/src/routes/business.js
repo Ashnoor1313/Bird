@@ -1,14 +1,22 @@
 import express from 'express';
 import prisma from '../prisma.js';
+import { CacheService } from '../services/CacheService.js';
 
 const router = express.Router();
 
-// Get list of all businesses
+// Get list of all businesses (Fast cached response)
 router.get('/', async (req, res) => {
   try {
+    const cacheKey = 'all_businesses';
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const businesses = await prisma.business.findMany({
       orderBy: { createdAt: 'asc' },
     });
+    CacheService.set(cacheKey, businesses, 1000 * 60 * 15);
     res.json(businesses);
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch businesses' });

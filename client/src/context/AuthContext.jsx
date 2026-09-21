@@ -52,7 +52,16 @@ export const AuthProvider = ({ children }) => {
 
   const [user, setUser] = useState(storedUser);
 
-  const [businesses, setBusinesses] = useState([]);
+  const [businesses, setBusinesses] = useState(() => {
+    try {
+      const cached = localStorage.getItem('bird_businesses');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const [loading, setLoading] = useState(false);
 
   const fetchBusinesses = useCallback(async () => {
@@ -62,6 +71,9 @@ export const AuthProvider = ({ children }) => {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           setBusinesses(data);
+          try {
+            localStorage.setItem('bird_businesses', JSON.stringify(data));
+          } catch {}
           return data;
         }
       }

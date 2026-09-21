@@ -5,7 +5,21 @@ const BusinessContext = createContext();
 
 export const BusinessProvider = ({ children }) => {
   const { businesses, fetchBusinesses } = useAuth();
-  const [activeBusiness, setActiveBusiness] = useState(null);
+  const [activeBusiness, setActiveBusiness] = useState(() => {
+    try {
+      const savedBusiness = localStorage.getItem('bird_active_business');
+      if (savedBusiness) return JSON.parse(savedBusiness);
+      const savedId = localStorage.getItem('bird_active_business_id');
+      const cached = localStorage.getItem('bird_businesses');
+      if (cached) {
+        const list = JSON.parse(cached);
+        if (Array.isArray(list) && list.length > 0) {
+          return list.find(b => b.id === savedId) || list[0];
+        }
+      }
+    } catch {}
+    return null;
+  });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const initBusiness = useCallback(async () => {
@@ -18,6 +32,10 @@ export const BusinessProvider = ({ children }) => {
       const savedId = localStorage.getItem('bird_active_business_id');
       const found = list.find(b => b.id === savedId) || list[0];
       setActiveBusiness(found);
+      try {
+        localStorage.setItem('bird_active_business_id', found.id);
+        localStorage.setItem('bird_active_business', JSON.stringify(found));
+      } catch {}
     }
   }, [businesses, fetchBusinesses]);
 
@@ -27,7 +45,10 @@ export const BusinessProvider = ({ children }) => {
 
   const selectBusiness = (business) => {
     setActiveBusiness(business);
-    localStorage.setItem('bird_active_business_id', business.id);
+    try {
+      localStorage.setItem('bird_active_business_id', business.id);
+      localStorage.setItem('bird_active_business', JSON.stringify(business));
+    } catch {}
     triggerRefresh();
   };
 

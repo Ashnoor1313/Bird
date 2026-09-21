@@ -41,42 +41,42 @@ export class StockEngine {
       });
 
       locations = [godown, store1, store2];
-    }
 
-    // Synchronize all products to all active locations (Common Inventory)
-    const products = await tx.product.findMany({ where: { businessId, status: 'ACTIVE' } });
-    for (const p of products) {
-      const totalQty = p.currentStock || 0;
-      const goodQty = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : totalQty;
-      const defQty = p.defectiveStock || 0;
-      const testQty = p.testingStock || 0;
+      // Synchronize all products to newly created default locations (Common Inventory)
+      const products = await tx.product.findMany({ where: { businessId, status: 'ACTIVE' } });
+      for (const p of products) {
+        const totalQty = p.currentStock || 0;
+        const goodQty = p.goodStock !== undefined && p.goodStock !== null ? p.goodStock : totalQty;
+        const defQty = p.defectiveStock || 0;
+        const testQty = p.testingStock || 0;
 
-      for (const loc of locations) {
-        await tx.locationStock.upsert({
-          where: {
-            businessId_locationId_productId: {
+        for (const loc of locations) {
+          await tx.locationStock.upsert({
+            where: {
+              businessId_locationId_productId: {
+                businessId,
+                locationId: loc.id,
+                productId: p.id,
+              },
+            },
+            create: {
               businessId,
               locationId: loc.id,
               productId: p.id,
+              goodStock: goodQty,
+              defectiveStock: defQty,
+              testingStock: testQty,
+              quantity: totalQty,
+              minStock: p.minStock || 5,
             },
-          },
-          create: {
-            businessId,
-            locationId: loc.id,
-            productId: p.id,
-            goodStock: goodQty,
-            defectiveStock: defQty,
-            testingStock: testQty,
-            quantity: totalQty,
-            minStock: p.minStock || 5,
-          },
-          update: {
-            goodStock: goodQty,
-            defectiveStock: defQty,
-            testingStock: testQty,
-            quantity: totalQty,
-          },
-        });
+            update: {
+              goodStock: goodQty,
+              defectiveStock: defQty,
+              testingStock: testQty,
+              quantity: totalQty,
+            },
+          });
+        }
       }
     }
 

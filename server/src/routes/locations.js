@@ -2,16 +2,33 @@ import express from 'express';
 import prisma from '../prisma.js';
 import { StockEngine } from '../services/StockEngine.js';
 import { authenticate, requireAdmin } from '../middleware/authMiddleware.js';
+import { CacheService } from '../services/CacheService.js';
 
 const router = express.Router();
 
-// GET ALL LOCATIONS FOR A BUSINESS (Auto-provisions defaults if none exist)
+// GET ALL LOCATIONS FOR A BUSINESS (Fast cached response)
 router.get('/', async (req, res) => {
   try {
     const { businessId } = req.query;
     if (!businessId) return res.status(400).json({ error: 'businessId required' });
 
-    const locations = await StockEngine.ensureDefaultLocations(businessId, prisma);
+    const cacheKey = `locations:${businessId}`;
+    const cached = CacheService.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    let locations = await prisma.location.findMany({
+      where: { businessId },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (locations.length === 0) {
+      locations = await StockEngine.ensureDefaultLocations(businessId, prisma);
+    }
+
+    // Cache locations for 10 minutes (sub-millisecond instant responses)
+    CacheService.set(cacheKey, locations, 1000 * 60 * 10);
     res.json(locations);
   } catch (err) {
     console.error('Failed to fetch locations:', err);
@@ -62,6 +79,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // Populate common stock for all products in this new location
     await StockEngine.syncBusinessStocks(businessId);
 
+    CacheService.invalidate('locations');
     res.status(201).json(location);
   } catch (err) {
     console.error('Failed to create location:', err);
@@ -86,6 +104,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
       },
     });
 
+    CacheService.invalidate('locations');
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Failed to update location' });
@@ -110,6 +129,7 @@ router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
       where: { id: req.params.id },
     });
 
+    CacheService.invalidate('locations');
     res.json({ message: 'Location deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete location' });
