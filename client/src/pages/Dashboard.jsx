@@ -420,13 +420,19 @@ const StoreDashboard = ({ data, activeBusiness, activeLocation, locations, selec
           </div>
         </div>
 
-        <div className="bird-card p-3.5 sm:p-5 bg-white border border-zinc-200 shadow-2xs hover:border-zinc-300 transition-all">
-          <div className="flex items-center gap-1.5 text-zinc-500 mb-1.5">
-            <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider">Receivables</span>
+        <div onClick={() => navigate('/customers')} className="bird-card p-3.5 sm:p-5 bg-white border border-amber-200 shadow-2xs hover:border-amber-400 transition-all cursor-pointer group">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5 text-zinc-500">
+              <Users className="w-3.5 h-3.5 text-amber-600" />
+              <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-amber-900">Receivables (Khata)</span>
+            </div>
+            <ChevronRight className="w-3.5 h-3.5 text-amber-600 group-hover:translate-x-0.5 transition-transform" />
           </div>
-          <p className="text-xl sm:text-3xl font-black text-emerald-950 tabular-nums">₹{moneyToReceive.toLocaleString('en-IN')}</p>
-          <div className="text-[11px] font-semibold text-zinc-500 mt-1">{totalCustomers} customers</div>
+          <p className="text-xl sm:text-3xl font-black text-amber-950 tabular-nums">₹{moneyToReceive.toLocaleString('en-IN')}</p>
+          <div className="text-[11px] font-semibold text-amber-800 mt-1 flex items-center justify-between">
+            <span>{totalCustomers} Customers</span>
+            <span className="font-bold text-amber-900 underline">Customer History →</span>
+          </div>
         </div>
 
         <div className="bird-card p-3.5 sm:p-5 bg-white border border-zinc-200 shadow-2xs hover:border-zinc-300 transition-all">

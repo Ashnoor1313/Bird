@@ -2,7 +2,28 @@ import React, { useState } from 'react';
 import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
-import { ChevronDown, Search, Plus, Store, Check, Sparkles, Building2, MapPin } from 'lucide-react';
+import {
+  ChevronDown,
+  Search,
+  Plus,
+  Store,
+  Check,
+  Sparkles,
+  Building2,
+  MapPin,
+  Menu,
+  X,
+  Users,
+  Smartphone,
+  BatteryCharging,
+  Receipt,
+  Wallet,
+  Boxes,
+  BarChart3,
+  TrendingUp,
+  Settings,
+  LayoutDashboard,
+} from 'lucide-react';
 import { useNavigate, useLocation as useRouteLocation } from 'react-router-dom';
 
 export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
@@ -12,6 +33,7 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [locationDropdownOpen, setLocationDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
 
   const navigate = useNavigate();
   const routeLocation = useRouteLocation();
@@ -70,12 +92,21 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         {/* Left Side: Breadcrumb & Context Chips */}
         <div className="flex items-center gap-2.5">
-          {/* Mobile Logo for small screens */}
-          <div className="flex items-center gap-2 cursor-pointer lg:hidden" onClick={() => navigate('/')}>
-            <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shadow-xs">
-              MI2
+          {/* Mobile Hamburger Menu & Brand Logo */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <button
+              onClick={() => setMobileDrawerOpen(true)}
+              className="p-1.5 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200 shrink-0 cursor-pointer"
+              aria-label="Open Mobile Menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+              <div className="w-7 h-7 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px] font-black shadow-xs">
+                MI2
+              </div>
+              <span className="font-bold text-sm tracking-tight text-slate-900">{activeBusiness?.name || 'MI2 Impex'}</span>
             </div>
-            <span className="font-bold text-sm tracking-tight text-slate-900">{activeBusiness?.name || 'MI2 Impex'}</span>
           </div>
 
           <div className="hidden lg:flex flex-col">
@@ -333,6 +364,76 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
           </button>
         </div>
       </div>
+
+      {/* Mobile Drawer Menu Overlay */}
+      {mobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex justify-start lg:hidden animate-fade-in">
+          <div className="w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between p-4 space-y-4 animate-in slide-in-from-left duration-200">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-black">
+                    MI2
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-xs text-slate-900">{activeBusiness?.name || 'MI2 Impex'}</h3>
+                    <p className="text-[10px] text-slate-500 font-semibold">{activeLocation?.name || 'All Stores'}</p>
+                  </div>
+                </div>
+                <button onClick={() => setMobileDrawerOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-160px)] pr-1">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">ERP MAIN NAVIGATION</div>
+                {[
+                  { name: 'Dashboard Overview', path: '/', icon: LayoutDashboard },
+                  { name: 'Customer Khata Accounts', path: '/customers', icon: Users, badge: 'KHATA' },
+                  { name: 'Sales Bills & Billing', path: '/sales', icon: Receipt },
+                  { name: 'Folders Stock Hub', path: '/folders', icon: Smartphone },
+                  { name: 'Batteries Stock Hub', path: '/batteries', icon: BatteryCharging },
+                  { name: 'Central Inventory Stock', path: '/stock', icon: Boxes },
+                  { name: 'Money & Balances', path: '/money', icon: Wallet },
+                  { name: 'Suppliers & Purchases', path: '/suppliers', icon: Building2 },
+                  { name: 'Business Reports', path: '/reports', icon: BarChart3 },
+                  { name: 'Profit & Loss (P&L)', path: '/pnl', icon: TrendingUp },
+                  { name: 'Store Settings', path: '/settings', icon: Settings },
+                ].map((item, idx) => {
+                  const Icon = item.icon;
+                  const isActive = routeLocation.pathname === item.path;
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setMobileDrawerOpen(false);
+                        navigate(item.path);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${
+                        isActive ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Icon className="w-4 h-4" />
+                        <span>{item.name}</span>
+                      </div>
+                      {item.badge && (
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${isActive ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-900 border border-amber-200'}`}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 text-[11px] font-semibold text-slate-400 text-center">
+              MI2 Mobile Spare Parts ERP
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

@@ -9,6 +9,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   TrendingUp,
+  Users,
   X,
 } from 'lucide-react';
 import { useLocation } from '../../context/LocationContext';
@@ -23,6 +24,7 @@ export const QuickActionModal = ({ isOpen, onClose, onActionSelect }) => {
 
   const actions = isGodown
     ? [
+        { id: 'customers', label: 'Customer Khata Accounts', desc: 'Per-customer order history & balance', icon: Users, path: '/customers' },
         { id: 'folders', label: 'Folders Stock', desc: 'Add or adjust folder models', icon: Smartphone, path: '/folders' },
         { id: 'batteries', label: 'Batteries Stock', desc: 'Add or adjust battery models', icon: BatteryCharging, path: '/batteries' },
         { id: 'scan-bill', label: 'Photo / Bill OCR', desc: 'Snap photo of bill or handwritten slip', icon: Camera, path: '/scan-bill' },
@@ -30,6 +32,7 @@ export const QuickActionModal = ({ isOpen, onClose, onActionSelect }) => {
         { id: 'pnl', label: 'Profit & Loss (P&L)', desc: 'Per-bill, customer margins & ledger', icon: TrendingUp, path: '/pnl' },
       ]
     : [
+        { id: 'customers', label: 'Customer History & Khata', desc: 'Detailed orders, bills & ledger per customer', icon: Users, path: '/customers' },
         { id: 'make-bill', label: 'Create Sale Bill', desc: 'Fast mobile customer sale', icon: Receipt, path: '/sales?action=new' },
         { id: 'receive-money', label: 'Receive Money', desc: 'Record payment from customer', icon: ArrowDownLeft, path: '/money?action=receive' },
         { id: 'pay-money', label: 'Pay Money', desc: 'Pay supplier or log expense', icon: ArrowUpRight, path: '/money?action=pay' },

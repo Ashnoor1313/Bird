@@ -12,6 +12,7 @@ import {
   Wallet,
   Settings,
   TrendingUp,
+  Users,
   Plus,
 } from 'lucide-react';
 
@@ -37,6 +38,12 @@ export const MobileBottomNav = ({ onOpenQuickAction, onOpenMore }) => {
       queryClient.prefetchQuery({
         queryKey: ['category-hub', bId, 'Batteries', lId],
         queryFn: () => fetch(`/api/reports/category-hub?businessId=${bId}&categoryName=Batteries&locationId=${lId}`).then(r => r.json()),
+        staleTime: 1000 * 60 * 5,
+      });
+    } else if (path === '/customers') {
+      queryClient.prefetchQuery({
+        queryKey: ['customers', bId, lId, 'ALL', '', 1, 50],
+        queryFn: () => fetch(`/api/customers?businessId=${bId}`).then(r => r.json()),
         staleTime: 1000 * 60 * 5,
       });
     } else if (path === '/sales') {
@@ -96,19 +103,19 @@ export const MobileBottomNav = ({ onOpenQuickAction, onOpenMore }) => {
         </button>
       </div>
 
-      {/* 4. Batteries Tab */}
+      {/* 4. Customer Khata & History Tab */}
       <NavLink
-        to="/batteries"
-        onMouseEnter={() => prefetchItem('/batteries')}
-        onTouchStart={() => prefetchItem('/batteries')}
+        to="/customers"
+        onMouseEnter={() => prefetchItem('/customers')}
+        onTouchStart={() => prefetchItem('/customers')}
         className={({ isActive }) =>
           `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 px-1 rounded-xl text-[10px] font-semibold transition-colors ${
-            isActive ? 'text-emerald-600 font-bold' : 'text-slate-400 hover:text-slate-700'
+            isActive ? 'text-amber-600 font-bold' : 'text-slate-400 hover:text-slate-700'
           }`
         }
       >
-        <BatteryCharging className="w-4 h-4" />
-        <span>Batteries</span>
+        <Users className="w-4 h-4" />
+        <span>Khata</span>
       </NavLink>
 
       {/* 5. Billing / Money Tab */}
