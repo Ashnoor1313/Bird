@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useBusiness } from '../../context/BusinessContext';
 import { useLocation } from '../../context/LocationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -365,14 +366,21 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
         </div>
       </div>
 
-      {/* Mobile Drawer Menu Overlay */}
-      {mobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex justify-start lg:hidden animate-fade-in">
-          <div className="w-4/5 max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between p-4 space-y-4 animate-in slide-in-from-left duration-200">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      {/* Mobile Drawer Menu Overlay (Rendered at document.body via Portal to break free from header stacking context) */}
+      {mobileDrawerOpen && createPortal(
+        <div className="fixed inset-0 z-[100] bg-zinc-950/70 backdrop-blur-xs flex justify-start lg:hidden animate-fade-in">
+          {/* Backdrop Overlay Click to Close */}
+          <div
+            className="absolute inset-0 bg-transparent"
+            onClick={() => setMobileDrawerOpen(false)}
+          ></div>
+
+          {/* Solid Opaque White Side Drawer Panel */}
+          <div className="relative z-[101] w-[80%] max-w-xs bg-white h-full shadow-2xl flex flex-col justify-between p-4 space-y-4 animate-in slide-in-from-left duration-200">
+            <div className="space-y-4 flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-black">
+                  <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center text-xs font-black shadow-xs">
                     MI2
                   </div>
                   <div>
@@ -380,12 +388,15 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
                     <p className="text-[10px] text-slate-500 font-semibold">{activeLocation?.name || 'All Stores'}</p>
                   </div>
                 </div>
-                <button onClick={() => setMobileDrawerOpen(false)} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg">
+                <button
+                  onClick={() => setMobileDrawerOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-160px)] pr-1">
+              <div className="space-y-1.5 overflow-y-auto flex-1 pr-1">
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-2 py-1">ERP MAIN NAVIGATION</div>
                 {[
                   { name: 'Dashboard Overview', path: '/', icon: LayoutDashboard },
@@ -410,15 +421,21 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
                         navigate(item.path);
                       }}
                       className={`w-full text-left p-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-colors ${
-                        isActive ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-700 hover:bg-slate-100'
+                        isActive
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-100'
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <Icon className="w-4 h-4" />
-                        <span>{item.name}</span>
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{item.name}</span>
                       </div>
                       {item.badge && (
-                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded ${isActive ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-900 border border-amber-200'}`}>
+                        <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded shrink-0 ${
+                          isActive
+                            ? 'bg-amber-400 text-slate-900'
+                            : 'bg-amber-100 text-amber-900 border border-amber-200'
+                        }`}>
                           {item.badge}
                         </span>
                       )}
@@ -428,11 +445,12 @@ export const Navbar = ({ onOpenSearch, onOpenQuickAction }) => {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 text-[11px] font-semibold text-slate-400 text-center">
+            <div className="pt-3 border-t border-slate-100 text-[11px] font-semibold text-slate-400 text-center shrink-0">
               MI2 Mobile Spare Parts ERP
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </header>
   );
