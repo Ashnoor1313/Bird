@@ -31,6 +31,23 @@ function createPrismaClient() {
 
 export const prisma = globalForPrisma.prisma || createPrismaClient();
 
+const defaultTxOptions = {
+  maxWait: 15000,
+  timeout: 60000,
+};
+
+if (!prisma._hasWrappedTransaction) {
+  const originalTransaction = prisma.$transaction.bind(prisma);
+  prisma.$transaction = function (arg, options) {
+    if (typeof arg === 'function') {
+      const mergedOptions = { ...defaultTxOptions, ...(options || {}) };
+      return originalTransaction(arg, mergedOptions);
+    }
+    return originalTransaction(arg, options);
+  };
+  prisma._hasWrappedTransaction = true;
+}
+
 if (process.env.NODE_ENV !== 'production') {
   globalForPrisma.prisma = prisma;
 }

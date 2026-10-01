@@ -234,6 +234,17 @@ router.post('/', async (req, res) => {
       let totalCost = 0;
       const saleItemsData = [];
 
+      // Pre-fetch locations and products to minimize roundtrips over remote database latency
+      const locationsList = await tx.location.findMany({
+        where: { businessId },
+        orderBy: { createdAt: 'asc' },
+      });
+      const productIds = items.map((i) => i.productId).filter(Boolean);
+      const dbProducts = productIds.length > 0
+        ? await tx.product.findMany({ where: { id: { in: productIds } } })
+        : [];
+      const productMap = new Map(dbProducts.map((p) => [p.id, p]));
+
       for (const item of items) {
         const qty = parseInt(item.quantity, 10);
         const price = parseFloat(item.unitPrice);
@@ -248,7 +259,7 @@ router.post('/', async (req, res) => {
         let purchasePrice = parseFloat(item.purchasePrice || 0);
 
         if (item.productId) {
-          const dbProduct = await tx.product.findUnique({ where: { id: item.productId } });
+          const dbProduct = productMap.get(item.productId);
           if (dbProduct) {
             resolvedProductName = resolvedProductName || dbProduct.name;
             resolvedModel = resolvedModel || dbProduct.model;
@@ -374,6 +385,7 @@ router.post('/', async (req, res) => {
       // 1. DEDUCT INVENTORY STOCK automatically from specific store location
       for (const item of items) {
         if (item.productId) {
+          const productObj = productMap.get(item.productId);
           await StockEngine.recordMovement(
             {
               businessId,
@@ -385,6 +397,9 @@ router.post('/', async (req, res) => {
               stockState: 'GOOD',
               reference: billNo,
               note: `Sale Bill #${billNo} to ${resolvedCustomerName}`,
+              business,
+              product: productObj,
+              locations: locationsList,
             },
             tx
           );
@@ -447,7 +462,7 @@ router.post('/', async (req, res) => {
       }
 
       return sale;
-    });
+    }, { maxWait: 15000, timeout: 60000 });
 
     // ⚡ Invalidate related caches immediately so fresh data is visible
     CacheService.invalidate('sales');

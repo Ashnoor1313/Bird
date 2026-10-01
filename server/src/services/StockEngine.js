@@ -216,20 +216,20 @@ export class StockEngine {
    * As soon as a bill is created or new stock is added, the stock updates everywhere in real-time.
    */
   static async recordMovement(
-    { businessId, productId, locationId, categoryId, type, quantity, stockState = 'GOOD', reference, note, createdBy },
+    { businessId, productId, locationId, categoryId, type, quantity, stockState = 'GOOD', reference, note, createdBy, business, product, locations },
     tx = prisma
   ) {
-    const business = await tx.business.findUnique({ where: { id: businessId } });
-    const allowNegativeStock = business?.allowNegativeStock ?? true;
+    const businessObj = business || (await tx.business.findUnique({ where: { id: businessId } }));
+    const allowNegativeStock = businessObj?.allowNegativeStock ?? true;
 
-    const product = await tx.product.findUnique({ where: { id: productId } });
-    if (!product) {
+    const productObj = product || (await tx.product.findUnique({ where: { id: productId } }));
+    if (!productObj) {
       throw new Error(`Product with ID ${productId} not found`);
     }
 
-    let prevGood = product.goodStock !== undefined && product.goodStock !== null ? product.goodStock : (product.currentStock || 0);
-    let prevDefective = product.defectiveStock || 0;
-    let prevTesting = product.testingStock || 0;
+    let prevGood = productObj.goodStock !== undefined && productObj.goodStock !== null ? productObj.goodStock : (productObj.currentStock || 0);
+    let prevDefective = productObj.defectiveStock || 0;
+    let prevTesting = productObj.testingStock || 0;
 
     if (stockState === 'GOOD') {
       prevGood = prevGood + quantity;
@@ -253,16 +253,19 @@ export class StockEngine {
     });
 
     // 2. Ensure active locations exist (Godown, Store 1, Store 2)
-    let locations = await tx.location.findMany({
-      where: { businessId },
-      orderBy: { createdAt: 'asc' },
-    });
-    if (locations.length === 0) {
-      locations = await this.ensureDefaultLocations(businessId, tx);
+    let locationsList = locations;
+    if (!locationsList || locationsList.length === 0) {
+      locationsList = await tx.location.findMany({
+        where: { businessId },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (locationsList.length === 0) {
+        locationsList = await this.ensureDefaultLocations(businessId, tx);
+      }
     }
 
     // 3. Synchronize LocationStock for ALL locations (Godown, Store 1, Store 2) with the common stock
-    for (const loc of locations) {
+    for (const loc of locationsList) {
       await tx.locationStock.upsert({
         where: {
           businessId_locationId_productId: {
@@ -279,7 +282,7 @@ export class StockEngine {
           defectiveStock: prevDefective,
           testingStock: prevTesting,
           quantity: newProductTotal,
-          minStock: product.minStock || 5,
+          minStock: productObj.minStock || 5,
         },
         update: {
           goodStock: prevGood,

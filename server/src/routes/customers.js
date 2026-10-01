@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get Single Customer with Ledger (Khata)
+// Get Single Customer with Ledger (Khata) & Full Order History
 router.get('/:id', async (req, res) => {
   try {
     const customer = await prisma.customer.findUnique({
@@ -62,14 +62,41 @@ router.get('/:id', async (req, res) => {
       include: {
         location: true,
         ledgers: { orderBy: { createdAt: 'desc' } },
-        sales: { orderBy: { createdAt: 'desc' }, take: 50 },
-        payments: { orderBy: { createdAt: 'desc' }, take: 50 },
+        sales: {
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+          include: { items: true },
+        },
+        payments: { orderBy: { createdAt: 'desc' }, take: 100 },
       },
     });
 
     if (!customer) return res.status(404).json({ error: 'Customer not found' });
 
-    res.json(customer);
+    // Aggregate totals for complete customer financial history
+    const salesAggregate = await prisma.sale.aggregate({
+      where: { customerId: req.params.id },
+      _sum: { total: true, paidAmount: true, dueAmount: true },
+      _count: { id: true },
+    });
+
+    const paymentsAggregate = await prisma.payment.aggregate({
+      where: { customerId: req.params.id, type: 'RECEIVE' },
+      _sum: { amount: true },
+    });
+
+    const totalOrderedAmount = salesAggregate._sum.total || 0;
+    const totalOrdersCount = salesAggregate._count.id || 0;
+    const totalReceivedAmount = paymentsAggregate._sum.amount || (salesAggregate._sum.paidAmount || 0);
+    const totalPendingAmount = customer.moneyToReceive;
+
+    res.json({
+      ...customer,
+      totalOrderedAmount,
+      totalOrdersCount,
+      totalReceivedAmount,
+      totalPendingAmount,
+    });
   } catch (err) {
     console.error('Fetch customer khata error:', err);
     res.status(500).json({ error: 'Failed to fetch customer khata' });

@@ -274,6 +274,11 @@ router.post('/', async (req, res) => {
       let totalSgst = 0;
       const purchaseItemsData = [];
 
+      const locationsList = await tx.location.findMany({
+        where: { businessId },
+        orderBy: { createdAt: 'asc' },
+      });
+
       for (const item of items) {
         const qty = parseInt(item.quantity, 10);
         const price = parseFloat(item.unitPrice);
@@ -343,6 +348,7 @@ router.post('/', async (req, res) => {
               quantity: parseInt(item.quantity, 10),
               reference: purchaseNo,
               note: `Purchase ${purchaseNo}`,
+              locations: locationsList,
             },
             tx
           );
@@ -370,6 +376,8 @@ router.post('/', async (req, res) => {
               quantity: parseInt(item.quantity, 10),
               reference: purchaseNo,
               note: `New Product created from Purchase ${purchaseNo}`,
+              product: newProduct,
+              locations: locationsList,
             },
             tx
           );
@@ -428,7 +436,7 @@ router.post('/', async (req, res) => {
       }
 
       return purchase;
-    });
+    }, { maxWait: 15000, timeout: 60000 });
 
     // ⚡ Invalidate related caches immediately
     CacheService.invalidate('purchases');

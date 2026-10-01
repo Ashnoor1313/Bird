@@ -201,7 +201,7 @@ export const InvoiceModal = ({ isOpen, onClose, sale, business }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-zinc-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-150 overflow-hidden">
       <style>{`
         @media print {
           body * {
@@ -226,20 +226,20 @@ export const InvoiceModal = ({ isOpen, onClose, sale, business }) => {
         }
       `}</style>
 
-      <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden my-auto flex flex-col animate-in zoom-in-95 duration-150">
+      <div className="bg-white border border-zinc-200 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] my-auto flex flex-col animate-in zoom-in-95 duration-150">
         {/* Header Action Bar */}
-        <div className="p-3.5 bg-zinc-900 text-white flex items-center justify-between no-print">
-          <div className="flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-emerald-400" />
-            <span className="font-bold text-xs">Sales Invoice #{billNo}</span>
+        <div className="p-3 sm:p-3.5 bg-zinc-900 text-white flex items-center justify-between shrink-0 no-print">
+          <div className="flex items-center gap-2 min-w-0">
+            <Receipt className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-bold text-xs truncate">Sales Invoice #{billNo}</span>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={handlePrint}
               className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
               title="Print Invoice"
             >
-              <Printer className="w-3.5 h-3.5 text-blue-400" />
+              <Printer className="w-3.5 h-3.5 text-blue-400 shrink-0" />
               <span className="hidden sm:inline">Print</span>
             </button>
             <button
@@ -247,7 +247,7 @@ export const InvoiceModal = ({ isOpen, onClose, sale, business }) => {
               className="px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
               title="Preview PDF in new tab"
             >
-              <Eye className="w-3.5 h-3.5 text-sky-400" />
+              <Eye className="w-3.5 h-3.5 text-sky-400 shrink-0" />
               <span className="hidden sm:inline">View PDF</span>
             </button>
             <button
@@ -257,28 +257,28 @@ export const InvoiceModal = ({ isOpen, onClose, sale, business }) => {
               title="Download PDF"
             >
               {isDownloadingPdf ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400 shrink-0" />
               ) : (
-                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <Download className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               )}
               <span className="hidden sm:inline">PDF</span>
             </button>
             <button
               onClick={handleShareWhatsApp}
               disabled={isSharingPdf}
-              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
               title="Send PDF on WhatsApp"
             >
               {isSharingPdf ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
               ) : (
-                <Share2 className="w-3.5 h-3.5" />
+                <Share2 className="w-3.5 h-3.5 shrink-0" />
               )}
-              <span>{isSharingPdf ? 'Preparing...' : 'WhatsApp'}</span>
+              <span className="hidden sm:inline">{isSharingPdf ? 'Preparing...' : 'WhatsApp'}</span>
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors ml-1"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors ml-0.5"
             >
               <X className="w-4 h-4" />
             </button>
@@ -288,7 +288,7 @@ export const InvoiceModal = ({ isOpen, onClose, sale, business }) => {
         {/* Status Notification Banner */}
         {statusMessage && (
           <div
-            className={`p-3 text-xs flex items-start justify-between gap-2 border-b no-print ${
+            className={`p-2.5 sm:p-3 text-xs flex items-start justify-between gap-2 border-b shrink-0 no-print ${
               statusMessage.type === 'success'
                 ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                 : 'bg-rose-50 text-rose-900 border-rose-200'
@@ -311,195 +311,201 @@ export const InvoiceModal = ({ isOpen, onClose, sale, business }) => {
           </div>
         )}
 
-        {/* Printable Basic Invoice Body */}
-        <div id="printable-invoice" ref={printRef} className="p-6 sm:p-8 space-y-5 bg-white text-zinc-900 font-sans text-xs">
-          {/* Store / Business Header */}
-          <div className="text-center pb-3 border-b-2 border-zinc-900 space-y-1">
-            <h1 className="text-lg sm:text-xl font-black uppercase tracking-tight text-zinc-900">
-              {businessName}
-            </h1>
-            <p className="text-[11px] font-semibold text-zinc-600">
-              {locationName} {businessAddress ? `• ${businessAddress}` : ''}
-            </p>
-            {businessPhone && (
-              <p className="text-[11px] font-medium text-zinc-600">
-                Phone: <span className="font-bold text-zinc-900">{businessPhone}</span>
+        {/* Printable Basic Invoice Body (Scrollable inside modal) */}
+        <div className="flex-1 overflow-y-auto">
+          <div id="printable-invoice" ref={printRef} className="p-4 sm:p-8 space-y-4 sm:space-y-5 bg-white text-zinc-900 font-sans text-xs">
+            {/* Store / Business Header */}
+            <div className="text-center pb-3 border-b-2 border-zinc-900 space-y-1">
+              <h1 className="text-lg sm:text-xl font-black uppercase tracking-tight text-zinc-900">
+                {businessName}
+              </h1>
+              <p className="text-[11px] font-semibold text-zinc-600">
+                {locationName} {businessAddress ? `• ${businessAddress}` : ''}
               </p>
-            )}
-            {businessGstin && (
-              <p className="text-[10px] font-mono text-zinc-500">
-                GSTIN: {businessGstin}
-              </p>
-            )}
-            <div className="pt-1">
-              <span className="inline-block px-3 py-0.5 rounded bg-zinc-900 text-white text-[10px] font-extrabold uppercase tracking-wider">
-                CASH MEMO / SALES INVOICE
-              </span>
-            </div>
-          </div>
-
-          {/* Invoice Metadata (Bill No, Date, Customer) */}
-          <div className="grid grid-cols-2 gap-4 py-2 border-b border-zinc-200">
-            <div className="space-y-1">
-              <span className="text-[10px] uppercase font-bold text-zinc-400 block">Billed To:</span>
-              <p className="font-extrabold text-zinc-900 text-xs sm:text-sm">
-                {sale.customerName || 'Walk-in Customer'}
-              </p>
-              {sale.customerPhone && (
-                <p className="text-zinc-600 font-medium">
-                  Ph: {sale.customerPhone}
+              {businessPhone && (
+                <p className="text-[11px] font-medium text-zinc-600">
+                  Phone: <span className="font-bold text-zinc-900">{businessPhone}</span>
                 </p>
+              )}
+              {businessGstin && (
+                <p className="text-[10px] font-mono text-zinc-500">
+                  GSTIN: {businessGstin}
+                </p>
+              )}
+              <div className="pt-1">
+                <span className="inline-block px-3 py-0.5 rounded bg-zinc-900 text-white text-[10px] font-extrabold uppercase tracking-wider">
+                  CASH MEMO / SALES INVOICE
+                </span>
+              </div>
+            </div>
+
+            {/* Invoice Metadata (Bill No, Date, Customer) */}
+            <div className="grid grid-cols-2 gap-4 py-2 border-b border-zinc-200">
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 block">Billed To:</span>
+                <p className="font-extrabold text-zinc-900 text-xs sm:text-sm">
+                  {sale.customerName || 'Walk-in Customer'}
+                </p>
+                {sale.customerPhone && (
+                  <p className="text-zinc-600 font-medium">
+                    Ph: {sale.customerPhone}
+                  </p>
+                )}
+              </div>
+
+              <div className="text-right space-y-1">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">Invoice No:</span>
+                  <p className="font-mono font-extrabold text-zinc-900 text-sm">
+                    #{billNo}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-zinc-400">Date:</span>
+                  <p className="font-medium text-zinc-700">{dateStr}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Clean Items Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-zinc-900 text-[10px] uppercase font-black text-zinc-800">
+                    <th className="py-2 pr-2 w-8 text-center">#</th>
+                    <th className="py-2 pr-2">Item Description</th>
+                    <th className="py-2 px-2 text-center w-12">Qty</th>
+                    <th className="py-2 px-2 text-right w-20">Rate</th>
+                    <th className="py-2 pl-2 text-right w-24">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200">
+                  {items.map((item, idx) => (
+                    <tr key={idx} className="text-xs">
+                      <td className="py-2 pr-2 text-center text-zinc-500 font-bold">{idx + 1}</td>
+                      <td className="py-2 pr-2">
+                        <div className="font-bold text-zinc-900">{item.productName}</div>
+                        {item.model && item.model !== item.productName && (
+                          <div className="text-[10px] text-zinc-500 font-medium">Model: {item.model}</div>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-center font-extrabold text-zinc-900">{item.quantity}</td>
+                      <td className="py-2 px-2 text-right font-medium text-zinc-800 tabular-nums">
+                        ₹{Number(item.unitPrice).toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-2 pl-2 text-right font-extrabold text-zinc-900 tabular-nums">
+                        ₹{Number(item.quantity * item.unitPrice).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Totals & Payment Breakdown */}
+            <div className="border-t-2 border-zinc-900 pt-3 space-y-1.5">
+              <div className="flex justify-between text-zinc-600 font-medium">
+                <span>Subtotal:</span>
+                <span className="font-bold text-zinc-900">₹{Number(subtotal).toLocaleString('en-IN')}</span>
+              </div>
+
+              {discount > 0 && (
+                <div className="flex justify-between text-rose-700 font-semibold">
+                  <span>Discount:</span>
+                  <span>-₹{Number(discount).toLocaleString('en-IN')}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between text-sm sm:text-base font-black text-zinc-900 pt-1 border-t border-zinc-200">
+                <span>Total Amount:</span>
+                <span className="tabular-nums">₹{Number(total).toLocaleString('en-IN')}</span>
+              </div>
+
+              <div className="flex justify-between text-xs font-bold text-zinc-800 pt-1">
+                <span>Paid via {paymentMethod}:</span>
+                <span className="text-emerald-700">₹{Number(paidAmount).toLocaleString('en-IN')}</span>
+              </div>
+
+              {dueAmount > 0 ? (
+                <div className="flex justify-between text-xs font-black text-rose-700 bg-rose-50 p-1.5 rounded border border-rose-200">
+                  <span>Balance Due (Khata):</span>
+                  <span>₹{Number(dueAmount).toLocaleString('en-IN')}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between text-[11px] font-bold text-emerald-700 bg-emerald-50 p-1 rounded border border-emerald-200">
+                  <span>Payment Status:</span>
+                  <span>PAID IN FULL</span>
+                </div>
               )}
             </div>
 
-            <div className="text-right space-y-1">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-zinc-400">Invoice No:</span>
-                <p className="font-mono font-extrabold text-zinc-900 text-sm">
-                  #{billNo}
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-zinc-400">Date:</span>
-                <p className="font-medium text-zinc-700">{dateStr}</p>
-              </div>
+            {/* Footer Terms & Conditions */}
+            <div className="border-t border-zinc-200 pt-3 text-[10px] text-zinc-500 space-y-1 text-center font-medium">
+              <p className="font-bold text-zinc-700">Terms & Conditions:</p>
+              {business?.terms ? (
+                <p className="whitespace-pre-line">{business.terms}</p>
+              ) : (
+                <>
+                  <p>1. Testing warranty 7 days on displays & batteries before installation.</p>
+                  <p>2. No warranty on physical or flex damage.</p>
+                </>
+              )}
+              <p className="font-bold text-zinc-900 pt-1">Thank you for your business!</p>
             </div>
-          </div>
-
-          {/* Clean Items Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b-2 border-zinc-900 text-[10px] uppercase font-black text-zinc-800">
-                  <th className="py-2 pr-2 w-8 text-center">#</th>
-                  <th className="py-2 pr-2">Item Description</th>
-                  <th className="py-2 px-2 text-center w-12">Qty</th>
-                  <th className="py-2 px-2 text-right w-20">Rate</th>
-                  <th className="py-2 pl-2 text-right w-24">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-200">
-                {items.map((item, idx) => (
-                  <tr key={idx} className="text-xs">
-                    <td className="py-2 pr-2 text-center text-zinc-500 font-bold">{idx + 1}</td>
-                    <td className="py-2 pr-2">
-                      <div className="font-bold text-zinc-900">{item.productName}</div>
-                      {item.model && item.model !== item.productName && (
-                        <div className="text-[10px] text-zinc-500 font-medium">Model: {item.model}</div>
-                      )}
-                    </td>
-                    <td className="py-2 px-2 text-center font-extrabold text-zinc-900">{item.quantity}</td>
-                    <td className="py-2 px-2 text-right font-medium text-zinc-800 tabular-nums">
-                      ₹{Number(item.unitPrice).toLocaleString('en-IN')}
-                    </td>
-                    <td className="py-2 pl-2 text-right font-extrabold text-zinc-900 tabular-nums">
-                      ₹{Number(item.quantity * item.unitPrice).toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Totals & Payment Breakdown */}
-          <div className="border-t-2 border-zinc-900 pt-3 space-y-1.5">
-            <div className="flex justify-between text-zinc-600 font-medium">
-              <span>Subtotal:</span>
-              <span className="font-bold text-zinc-900">₹{Number(subtotal).toLocaleString('en-IN')}</span>
-            </div>
-
-            {discount > 0 && (
-              <div className="flex justify-between text-rose-700 font-semibold">
-                <span>Discount:</span>
-                <span>-₹{Number(discount).toLocaleString('en-IN')}</span>
-              </div>
-            )}
-
-            <div className="flex justify-between text-sm sm:text-base font-black text-zinc-900 pt-1 border-t border-zinc-200">
-              <span>Total Amount:</span>
-              <span className="tabular-nums">₹{Number(total).toLocaleString('en-IN')}</span>
-            </div>
-
-            <div className="flex justify-between text-xs font-bold text-zinc-800 pt-1">
-              <span>Paid via {paymentMethod}:</span>
-              <span className="text-emerald-700">₹{Number(paidAmount).toLocaleString('en-IN')}</span>
-            </div>
-
-            {dueAmount > 0 ? (
-              <div className="flex justify-between text-xs font-black text-rose-700 bg-rose-50 p-1.5 rounded border border-rose-200">
-                <span>Balance Due (Khata):</span>
-                <span>₹{Number(dueAmount).toLocaleString('en-IN')}</span>
-              </div>
-            ) : (
-              <div className="flex justify-between text-[11px] font-bold text-emerald-700 bg-emerald-50 p-1 rounded border border-emerald-200">
-                <span>Payment Status:</span>
-                <span>PAID IN FULL</span>
-              </div>
-            )}
-          </div>
-
-          {/* Footer Terms & Conditions */}
-          <div className="border-t border-zinc-200 pt-3 text-[10px] text-zinc-500 space-y-1 text-center font-medium">
-            <p className="font-bold text-zinc-700">Terms & Conditions:</p>
-            {business?.terms ? (
-              <p className="whitespace-pre-line">{business.terms}</p>
-            ) : (
-              <>
-                <p>1. 7 Days Testing Warranty on Folders & Batteries (stamp & seal required).</p>
-                <p>2. Physical damage, flex tear, or display glass break is NOT covered under testing warranty.</p>
-              </>
-            )}
-            <p className="font-bold text-zinc-900 pt-1">Thank you for your business!</p>
           </div>
         </div>
 
-        {/* Bottom Button Bar */}
-        <div className="p-3 bg-zinc-50 border-t border-zinc-200 flex flex-wrap items-center justify-between gap-2 no-print">
+        {/* Bottom Action Bar */}
+        <div className="p-2.5 sm:p-3 bg-zinc-50 border-t border-zinc-200 flex items-center justify-between gap-1.5 sm:gap-2 shrink-0 no-print">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-100 transition-colors"
+            className="px-3.5 py-2 rounded-xl text-xs font-bold text-zinc-700 bg-white border border-zinc-200 hover:bg-zinc-100 transition-colors shadow-2xs shrink-0"
           >
             Done
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-0.5">
             <button
               onClick={handleViewPdf}
-              className="px-3.5 py-2 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
-              title="Preview PDF in new browser tab"
+              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs whitespace-nowrap"
+              title="Preview PDF"
             >
-              <Eye className="w-3.5 h-3.5 text-sky-600" />
-              <span>View PDF</span>
+              <Eye className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+              <span className="hidden sm:inline">View PDF</span>
+              <span className="sm:hidden">View</span>
             </button>
             <button
               onClick={handleDownloadPdf}
               disabled={isDownloadingPdf}
-              className="px-3.5 py-2 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
+              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-white border border-zinc-300 hover:bg-zinc-100 text-zinc-800 font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50 whitespace-nowrap"
+              title="Download PDF"
             >
               {isDownloadingPdf ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500 shrink-0" />
               ) : (
-                <Download className="w-3.5 h-3.5 text-zinc-600" />
+                <Download className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
               )}
-              <span>{isDownloadingPdf ? 'Downloading...' : 'Download PDF'}</span>
+              <span className="hidden sm:inline">{isDownloadingPdf ? 'Downloading...' : 'Download PDF'}</span>
+              <span className="sm:hidden">PDF</span>
             </button>
             <button
               onClick={handleShareWhatsApp}
               disabled={isSharingPdf}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50"
+              className="px-3 sm:px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs disabled:opacity-50 whitespace-nowrap"
+              title="Send PDF on WhatsApp"
             >
               {isSharingPdf ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
               ) : (
-                <Share2 className="w-3.5 h-3.5" />
+                <Share2 className="w-3.5 h-3.5 shrink-0" />
               )}
-              <span>{isSharingPdf ? 'Preparing PDF...' : 'Send PDF on WhatsApp'}</span>
+              <span>{isSharingPdf ? 'Preparing...' : 'Send PDF on WhatsApp'}</span>
             </button>
             <button
               onClick={handlePrint}
-              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-black text-white font-bold text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
+              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-black text-white font-bold text-xs items-center gap-1.5 transition-colors shadow-2xs whitespace-nowrap"
             >
-              <Printer className="w-3.5 h-3.5" />
-              <span>Print Invoice</span>
+              <Printer className="w-3.5 h-3.5 shrink-0" />
+              <span>Print</span>
             </button>
           </div>
         </div>
